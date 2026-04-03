@@ -9,6 +9,26 @@ import type { ToolRequest, ToolResponse } from '@/lib/types';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const ALLOWED_ORIGIN = process.env.MCP_UI_ORIGIN || '*';
+
+function withCors<T>(response: NextResponse<T>) {
+  response.headers.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+  response.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  return response;
+}
+
+export async function OPTIONS() {
+  return withCors(
+    NextResponse.json(
+      {},
+      {
+        status: 204
+      }
+    )
+  );
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Partial<ToolRequest>;
@@ -33,7 +53,7 @@ export async function POST(request: Request) {
         }
 
         const result = await runQuery(input.db, input.query);
-        return NextResponse.json(result, { status: result.success ? 200 : 400 });
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
       case 'list_tables': {
@@ -47,7 +67,7 @@ export async function POST(request: Request) {
         }
 
         const result = await listTables(input.db);
-        return NextResponse.json(result, { status: result.success ? 200 : 400 });
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
       case 'get_table_schema': {
@@ -61,7 +81,7 @@ export async function POST(request: Request) {
         }
 
         const result = await getTableSchema(input.db, input.table, input.schema);
-        return NextResponse.json(result, { status: result.success ? 200 : 400 });
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
       case 'get_relationships': {
@@ -75,21 +95,21 @@ export async function POST(request: Request) {
         }
 
         const result = await getRelationships(input.db, input.table, input.schema);
-        return NextResponse.json(result, { status: result.success ? 200 : 400 });
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
       default:
-        return NextResponse.json<ToolResponse>({
+        return withCors(NextResponse.json<ToolResponse>({
           success: false,
           data: null,
           error: `Unsupported tool: ${body.tool}`
-        }, { status: 400 });
+        }, { status: 400 }));
     }
   } catch (error) {
-    return NextResponse.json<ToolResponse>({
+    return withCors(NextResponse.json<ToolResponse>({
       success: false,
       data: null,
       error: error instanceof Error ? error.message : 'Unexpected server error.'
-    }, { status: 500 });
+    }, { status: 500 }));
   }
 }
