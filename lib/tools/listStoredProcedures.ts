@@ -1,6 +1,6 @@
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryPostgres } from '@/lib/db/postgres';
-import type { DBType, ToolResponse } from '@/lib/types';
+import type { DBType, ToolResponse, DatabaseCredentials } from '@/lib/types';
 
 type StoredProcedureRow = {
   schema?: string;
@@ -12,7 +12,8 @@ type StoredProcedureRow = {
 };
 
 export async function listStoredProcedures(
-  db: DBType
+  db: DBType,
+  credentials?: DatabaseCredentials
 ): Promise<ToolResponse<{ procedures: { schema: string; name: string }[] }>> {
   try {
     if (db === 'postgres') {
@@ -23,7 +24,9 @@ export async function listStoredProcedures(
           FROM information_schema.routines
           WHERE routine_type = 'PROCEDURE'
           ORDER BY routine_schema, routine_name
-        `
+        `,
+        [],
+        credentials?.postgres
       );
 
       return {
@@ -45,7 +48,9 @@ export async function listStoredProcedures(
         FROM INFORMATION_SCHEMA.ROUTINES
         WHERE ROUTINE_TYPE = 'PROCEDURE'
         ORDER BY SPECIFIC_SCHEMA, SPECIFIC_NAME
-      `
+      `,
+      {},
+      credentials?.mssql
     );
 
     const rows = result.rows as StoredProcedureRow[];

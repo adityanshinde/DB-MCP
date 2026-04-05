@@ -1,6 +1,7 @@
 import sql from 'mssql';
 
 import { CONFIG } from '@/lib/config';
+import type { DatabaseCredentials } from '@/lib/types';
 
 let poolPromise: Promise<sql.ConnectionPool> | null = null;
 
@@ -27,9 +28,35 @@ function getPool(): Promise<sql.ConnectionPool> {
   return poolPromise as Promise<sql.ConnectionPool>;
 }
 
-export async function queryMSSQL(sqlText: string, params: Record<string, unknown> = {}) {
+function getDynamicPool(credentials: DatabaseCredentials['mssql']): Promise<sql.ConnectionPool> {
+  if (!credentials) {
+    throw new Error('MSSQL credentials not provided.');
+  }
+
+  return new sql.ConnectionPool({
+    user: credentials.username,
+    password: credentials.password,
+    server: credentials.server,
+    database: credentials.database,
+    options: {
+      encrypt: true,
+      trustServerCertificate: true
+    },
+    pool: {
+      max: 5,
+      min: 0,
+      idleTimeoutMillis: 5_000
+    }
+  }).connect();
+}
+
+export async function queryMSSQL(
+  sqlText: string,
+  params: Record<string, unknown> = {},
+  credentials?: DatabaseCredentials['mssql']
+) {
   try {
-    const pool = await getPool();
+    const pool = credentials ? await getDynamicPool(credentials) : await getPool();
     const request = pool.request();
 
     for (const [name, value] of Object.entries(params)) {
@@ -37,6 +64,11 @@ export async function queryMSSQL(sqlText: string, params: Record<string, unknown
     }
 
     const result = await request.query(sqlText);
+
+    if (credentials) {
+      await pool.close();
+    }
+
     return {
       rows: result.recordset,
       rowCount: result.rowsAffected?.[0] ?? result.recordset.length,

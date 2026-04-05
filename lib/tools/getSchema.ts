@@ -1,7 +1,7 @@
 import { CONFIG } from '@/lib/config';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryPostgres } from '@/lib/db/postgres';
-import type { DBType, ToolResponse } from '@/lib/types';
+import type { DBType, ToolResponse, DatabaseCredentials } from '@/lib/types';
 
 function resolveSchema(db: DBType, schema?: string): string {
   const fallback = db === 'postgres' ? 'public' : 'dbo';
@@ -17,7 +17,8 @@ function resolveSchema(db: DBType, schema?: string): string {
 export async function getTableSchema(
   db: DBType,
   table: string,
-  schema?: string
+  schema?: string,
+  credentials?: DatabaseCredentials
 ): Promise<ToolResponse<{ table: string; schema: string; columns: Array<Record<string, unknown>> }>> {
   try {
     const resolvedSchema = resolveSchema(db, schema);
@@ -28,7 +29,8 @@ export async function getTableSchema(
          FROM information_schema.columns
          WHERE table_name = $1 AND table_schema = $2
          ORDER BY ordinal_position`,
-        [table, resolvedSchema]
+        [table, resolvedSchema],
+        credentials?.postgres
       );
 
       return {
@@ -50,7 +52,8 @@ export async function getTableSchema(
       {
         tableName: table,
         schemaName: resolvedSchema
-      }
+      },
+      credentials?.mssql
     );
 
     return {

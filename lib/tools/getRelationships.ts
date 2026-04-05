@@ -1,7 +1,7 @@
 import { CONFIG } from '@/lib/config';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryPostgres } from '@/lib/db/postgres';
-import type { DBType, ToolResponse } from '@/lib/types';
+import type { DBType, ToolResponse, DatabaseCredentials } from '@/lib/types';
 
 function resolveSchema(db: DBType, schema?: string): string {
   const fallback = db === 'postgres' ? 'public' : 'dbo';
@@ -17,7 +17,8 @@ function resolveSchema(db: DBType, schema?: string): string {
 export async function getRelationships(
   db: DBType,
   table?: string,
-  schema?: string
+  schema?: string,
+  credentials?: DatabaseCredentials
 ): Promise<ToolResponse<{ relationships: Array<Record<string, unknown>> }>> {
   try {
     const resolvedSchema = resolveSchema(db, schema);
@@ -42,7 +43,8 @@ export async function getRelationships(
            AND tc.table_schema = $1
            AND ($2::text IS NULL OR tc.table_name = $2)
          ORDER BY tc.table_name, tc.constraint_name`,
-        [resolvedSchema, table ?? null]
+        [resolvedSchema, table ?? null],
+        credentials?.postgres
       );
 
       return {
@@ -75,7 +77,8 @@ export async function getRelationships(
       {
         schemaName: resolvedSchema,
         tableName: table ?? null
-      }
+      },
+      credentials?.mssql
     );
 
     return {

@@ -2,7 +2,7 @@ import { CONFIG } from '@/lib/config';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryPostgres } from '@/lib/db/postgres';
 import { validateReadOnlyQuery } from '@/lib/validators/queryValidator';
-import type { DBType, QueryMetadata, ToolResponse } from '@/lib/types';
+import type { DBType, QueryMetadata, ToolResponse, DatabaseCredentials } from '@/lib/types';
 
 function hasExistingResultLimit(query: string): boolean {
   return /\b(limit|fetch\s+first)\b/i.test(query);
@@ -119,13 +119,13 @@ function injectMssqlTop(query: string): string {
   return `${query.slice(0, selectIndex)}SELECT TOP (${CONFIG.app.maxRows})${selectClause.slice('SELECT '.length)}`;
 }
 
-export async function runQuery(db: DBType, query: string): Promise<ToolResponse<{ metadata: QueryMetadata; rows: unknown[] }>> {
+export async function runQuery(db: DBType, query: string, credentials?: DatabaseCredentials): Promise<ToolResponse<{ metadata: QueryMetadata; rows: unknown[] }>> {
   try {
     const validated = validateReadOnlyQuery(query);
     const executedQuery = db === 'postgres' ? injectPostgresLimit(validated) : injectMssqlTop(validated);
 
     if (db === 'postgres') {
-      const result = await queryPostgres(executedQuery);
+      const result = await queryPostgres(executedQuery, [], credentials?.postgres);
       return {
         success: true,
         data: {
@@ -141,7 +141,7 @@ export async function runQuery(db: DBType, query: string): Promise<ToolResponse<
       };
     }
 
-    const result = await queryMSSQL(executedQuery);
+    const result = await queryMSSQL(executedQuery, {}, credentials?.mssql);
     return {
       success: true,
       data: {

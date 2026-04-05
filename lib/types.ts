@@ -32,12 +32,36 @@ export type GetRelationshipsInput = {
   schema?: string;
 };
 
+export type DatabaseCredentials = {
+  type: DBType;
+  postgres?: {
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    database: string;
+  };
+  mssql?: {
+    server: string;
+    username: string;
+    password: string;
+    database: string;
+    port?: number;
+  };
+};
+
 export type ToolInputMap = {
   run_query: RunQueryInput;
   list_tables: ListTablesInput;
   get_table_schema: GetTableSchemaInput;
   get_relationships: GetRelationshipsInput;
   list_stored_procedures: ListStoredProceduresInput;
+};
+
+export type ToolRequestWithCredentials<TTool extends ToolName = ToolName> = {
+  tool: TTool;
+  input: ToolInputMap[TTool];
+  credentials?: DatabaseCredentials;
 };
 
 export type ToolRequest<TTool extends ToolName = ToolName> = {

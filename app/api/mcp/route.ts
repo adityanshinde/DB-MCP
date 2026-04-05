@@ -5,7 +5,7 @@ import { getTableSchema } from '@/lib/tools/getSchema';
 import { listTables } from '@/lib/tools/listTables';
 import { runQuery } from '@/lib/tools/runQuery';
 import { listStoredProcedures } from '@/lib/tools/listStoredProcedures';
-import type { ToolRequest, ToolResponse } from '@/lib/types';
+import type { ToolRequestWithCredentials, ToolResponse } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,7 +29,7 @@ export async function OPTIONS() {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as Partial<ToolRequest>;
+    const body = (await request.json()) as Partial<ToolRequestWithCredentials>;
 
     if (!body.tool) {
       return withCors(NextResponse.json<ToolResponse>({
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     switch (body.tool) {
       case 'run_query': {
-        const input = body.input as ToolRequest<'run_query'>['input'];
+        const input = body.input as ToolRequestWithCredentials<'run_query'>['input'];
         if (!input?.db || !input?.query) {
           return withCors(NextResponse.json<ToolResponse>({
             success: false,
@@ -50,12 +50,12 @@ export async function POST(request: Request) {
           }, { status: 400 }));
         }
 
-        const result = await runQuery(input.db, input.query);
+        const result = await runQuery(input.db, input.query, body.credentials);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
       case 'list_tables': {
-        const input = body.input as ToolRequest<'list_tables'>['input'];
+        const input = body.input as ToolRequestWithCredentials<'list_tables'>['input'];
         if (!input?.db) {
           return withCors(NextResponse.json<ToolResponse>({
             success: false,
@@ -64,12 +64,12 @@ export async function POST(request: Request) {
           }, { status: 400 }));
         }
 
-        const result = await listTables(input.db);
+        const result = await listTables(input.db, body.credentials);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
       case 'get_table_schema': {
-        const input = body.input as ToolRequest<'get_table_schema'>['input'];
+        const input = body.input as ToolRequestWithCredentials<'get_table_schema'>['input'];
         if (!input?.db || !input?.table) {
           return withCors(NextResponse.json<ToolResponse>({
             success: false,
@@ -78,12 +78,12 @@ export async function POST(request: Request) {
           }, { status: 400 }));
         }
 
-        const result = await getTableSchema(input.db, input.table, input.schema);
+        const result = await getTableSchema(input.db, input.table, input.schema, body.credentials);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
       case 'get_relationships': {
-        const input = body.input as ToolRequest<'get_relationships'>['input'];
+        const input = body.input as ToolRequestWithCredentials<'get_relationships'>['input'];
         if (!input?.db) {
           return withCors(NextResponse.json<ToolResponse>({
             success: false,
@@ -92,12 +92,12 @@ export async function POST(request: Request) {
           }, { status: 400 }));
         }
 
-        const result = await getRelationships(input.db, input.table, input.schema);
+        const result = await getRelationships(input.db, input.table, input.schema, body.credentials);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
       case 'list_stored_procedures': {
-        const input = body.input as ToolRequest<'list_stored_procedures'>['input'];
+        const input = body.input as ToolRequestWithCredentials<'list_stored_procedures'>['input'];
         if (!input?.db) {
           return withCors(NextResponse.json<ToolResponse>({
             success: false,
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
           }, { status: 400 }));
         }
 
-        const result = await listStoredProcedures(input.db);
+        const result = await listStoredProcedures(input.db, body.credentials);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
