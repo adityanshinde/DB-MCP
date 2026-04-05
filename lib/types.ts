@@ -1,6 +1,11 @@
 export type DBType = 'postgres' | 'mssql';
 
-export type ToolName = 'run_query' | 'list_tables' | 'get_table_schema' | 'get_relationships';
+export type ToolName =
+  | 'run_query'
+  | 'list_tables'
+  | 'get_table_schema'
+  | 'get_relationships'
+  | 'list_stored_procedures';
 
 export type RunQueryInput = {
   db: DBType;
@@ -8,6 +13,10 @@ export type RunQueryInput = {
 };
 
 export type ListTablesInput = {
+  db: DBType;
+};
+
+export type ListStoredProceduresInput = {
   db: DBType;
 };
 
@@ -28,6 +37,7 @@ export type ToolInputMap = {
   list_tables: ListTablesInput;
   get_table_schema: GetTableSchemaInput;
   get_relationships: GetRelationshipsInput;
+  list_stored_procedures: ListStoredProceduresInput;
 };
 
 export type ToolRequest<TTool extends ToolName = ToolName> = {
