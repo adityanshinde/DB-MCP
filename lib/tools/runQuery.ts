@@ -1,6 +1,8 @@
 import { CONFIG } from '@/lib/config';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryPostgres } from '@/lib/db/postgres';
+import { queryMySQL } from '@/lib/db/mysql';
+import { querySQLite } from '@/lib/db/sqlite';
 import { validateReadOnlyQuery } from '@/lib/validators/queryValidator';
 import type { DBType, QueryMetadata, ToolResponse, DatabaseCredentials } from '@/lib/types';
 
@@ -122,7 +124,7 @@ function injectMssqlTop(query: string): string {
 export async function runQuery(db: DBType, query: string, credentials?: DatabaseCredentials): Promise<ToolResponse<{ metadata: QueryMetadata; rows: unknown[] }>> {
   try {
     const validated = validateReadOnlyQuery(query);
-    const executedQuery = db === 'postgres' ? injectPostgresLimit(validated) : injectMssqlTop(validated);
+    const executedQuery = db === 'postgres' ? injectPostgresLimit(validated) : db === 'mssql' ? injectMssqlTop(validated) : injectPostgresLimit(validated);
 
     if (db === 'postgres') {
       const result = await queryPostgres(executedQuery, [], credentials?.postgres);
@@ -141,19 +143,61 @@ export async function runQuery(db: DBType, query: string, credentials?: Database
       };
     }
 
-    const result = await queryMSSQL(executedQuery, {}, credentials?.mssql);
-    return {
-      success: true,
-      data: {
-        metadata: {
-          db,
-          rows: result.rowCount,
-          columns: result.columns,
-          query: executedQuery
+    if (db === 'mssql') {
+      const result = await queryMSSQL(executedQuery, {}, credentials?.mssql);
+      return {
+        success: true,
+        data: {
+          metadata: {
+            db,
+            rows: result.rowCount,
+            columns: result.columns,
+            query: executedQuery
+          },
+          rows: result.rows
         },
-        rows: result.rows
-      },
-      error: null
+        error: null
+      };
+    }
+
+    if (db === 'mysql') {
+      const rows = (await queryMySQL(executedQuery, credentials)) as unknown[];
+      return {
+        success: true,
+        data: {
+          metadata: {
+            db,
+            rows: rows.length,
+            columns: Object.keys(rows[0] || {}),
+            query: executedQuery
+          },
+          rows
+        },
+        error: null
+      };
+    }
+
+    if (db === 'sqlite') {
+      const rows = (await querySQLite(executedQuery, credentials)) as unknown[];
+      return {
+        success: true,
+        data: {
+          metadata: {
+            db,
+            rows: rows.length,
+            columns: Object.keys(rows[0] || {}),
+            query: executedQuery
+          },
+          rows
+        },
+        error: null
+      };
+    }
+
+    return {
+      success: false,
+      error: 'Unsupported database type',
+      data: null
     };
   } catch (error) {
     return {

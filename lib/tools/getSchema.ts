@@ -1,6 +1,8 @@
 import { CONFIG } from '@/lib/config';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryPostgres } from '@/lib/db/postgres';
+import { getSchemaMySQL } from '@/lib/db/mysql';
+import { getSchemaSQLite } from '@/lib/db/sqlite';
 import type { DBType, ToolResponse, DatabaseCredentials } from '@/lib/types';
 
 function resolveSchema(db: DBType, schema?: string): string {
@@ -42,28 +44,56 @@ export async function getTableSchema(
         },
         error: null
       };
-    }
+    } else if (db === 'mssql') {
+      const result = await queryMSSQL(
+        `SELECT column_name, data_type, is_nullable, ordinal_position
+         FROM information_schema.columns
+         WHERE table_name = @tableName AND table_schema = @schemaName
+         ORDER BY ordinal_position`,
+        {
+          tableName: table,
+          schemaName: resolvedSchema
+        },
+        credentials?.mssql
+      );
 
-    const result = await queryMSSQL(
-      `SELECT column_name, data_type, is_nullable, ordinal_position
-       FROM information_schema.columns
-       WHERE table_name = @tableName AND table_schema = @schemaName
-       ORDER BY ordinal_position`,
-      {
-        tableName: table,
-        schemaName: resolvedSchema
-      },
-      credentials?.mssql
-    );
-
+      return {
+        success: true,
+        data: {
+          table,
+          schema: resolvedSchema,
+          columns: result.rows
+        },
+        error: null
+      };
+    } else if (db === 'mysql') {
+    const columns = await getSchemaMySQL(table, credentials);
     return {
       success: true,
       data: {
         table,
-        schema: resolvedSchema,
-        columns: result.rows
+        schema: 'default',
+        columns: columns as Array<Record<string, unknown>>
       },
       error: null
+    };
+    } else if (db === 'sqlite') {
+      const columns = await getSchemaSQLite(table, credentials);
+      return {
+        success: true,
+        data: {
+          table,
+          schema: 'default',
+          columns: columns as Array<Record<string, unknown>>
+        },
+        error: null
+      };
+    }
+
+    return {
+      success: false,
+      data: null,
+      error: 'Unsupported database type'
     };
   } catch (error) {
     return {

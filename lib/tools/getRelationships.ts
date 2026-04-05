@@ -1,6 +1,8 @@
 import { CONFIG } from '@/lib/config';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryPostgres } from '@/lib/db/postgres';
+import { getRelationshipsMySQL } from '@/lib/db/mysql';
+import { getRelationshipsSQLite } from '@/lib/db/sqlite';
 import type { DBType, ToolResponse, DatabaseCredentials } from '@/lib/types';
 
 function resolveSchema(db: DBType, schema?: string): string {
@@ -52,41 +54,61 @@ export async function getRelationships(
         data: { relationships: result.rows },
         error: null
       };
-    }
+    } else if (db === 'mssql') {
+      const result = await queryMSSQL(
+        `SELECT
+           fk.name AS constraint_name,
+           sch_parent.name AS table_schema,
+           parent_tbl.name AS table_name,
+           parent_col.name AS column_name,
+           sch_ref.name AS foreign_table_schema,
+           ref_tbl.name AS foreign_table_name,
+           ref_col.name AS foreign_column_name
+         FROM sys.foreign_keys fk
+         INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+         INNER JOIN sys.tables parent_tbl ON fkc.parent_object_id = parent_tbl.object_id
+         INNER JOIN sys.schemas sch_parent ON parent_tbl.schema_id = sch_parent.schema_id
+         INNER JOIN sys.columns parent_col ON fkc.parent_object_id = parent_col.object_id AND fkc.parent_column_id = parent_col.column_id
+         INNER JOIN sys.tables ref_tbl ON fkc.referenced_object_id = ref_tbl.object_id
+         INNER JOIN sys.schemas sch_ref ON ref_tbl.schema_id = sch_ref.schema_id
+         INNER JOIN sys.columns ref_col ON fkc.referenced_object_id = ref_col.object_id AND fkc.referenced_column_id = ref_col.column_id
+         WHERE sch_parent.name = @schemaName
+           AND (@tableName IS NULL OR parent_tbl.name = @tableName)
+         ORDER BY parent_tbl.name, fk.name`,
+        {
+          schemaName: resolvedSchema,
+          tableName: table ?? null
+        },
+        credentials?.mssql
+      );
 
-    const result = await queryMSSQL(
-      `SELECT
-         fk.name AS constraint_name,
-         sch_parent.name AS table_schema,
-         parent_tbl.name AS table_name,
-         parent_col.name AS column_name,
-         sch_ref.name AS foreign_table_schema,
-         ref_tbl.name AS foreign_table_name,
-         ref_col.name AS foreign_column_name
-       FROM sys.foreign_keys fk
-       INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
-       INNER JOIN sys.tables parent_tbl ON fkc.parent_object_id = parent_tbl.object_id
-       INNER JOIN sys.schemas sch_parent ON parent_tbl.schema_id = sch_parent.schema_id
-       INNER JOIN sys.columns parent_col ON fkc.parent_object_id = parent_col.object_id AND fkc.parent_column_id = parent_col.column_id
-       INNER JOIN sys.tables ref_tbl ON fkc.referenced_object_id = ref_tbl.object_id
-       INNER JOIN sys.schemas sch_ref ON ref_tbl.schema_id = sch_ref.schema_id
-       INNER JOIN sys.columns ref_col ON fkc.referenced_object_id = ref_col.object_id AND fkc.referenced_column_id = ref_col.column_id
-       WHERE sch_parent.name = @schemaName
-         AND (@tableName IS NULL OR parent_tbl.name = @tableName)
-       ORDER BY parent_tbl.name, fk.name`,
-      {
-        schemaName: resolvedSchema,
-        tableName: table ?? null
-      },
-      credentials?.mssql
-    );
-
+      return {
+        success: true,
+        data: { relationships: result.rows },
+        error: null
+      };
+    } else if (db === 'mysql') {
+    const relationships = await getRelationshipsMySQL(table, credentials);
     return {
       success: true,
-      data: { relationships: result.rows },
+      data: { relationships: relationships as Array<Record<string, unknown>> },
       error: null
     };
-  } catch (error) {
+  } else if (db === 'sqlite') {
+    const relationships = await getRelationshipsSQLite(table, credentials);
+    return {
+      success: true,
+      data: { relationships: relationships as Array<Record<string, unknown>> },
+      error: null
+    };
+  }
+
+  return {
+    success: false,
+    data: null,
+    error: 'Unsupported database type'
+  };
+} catch (error) {
     return {
       success: false,
       data: null,

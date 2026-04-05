@@ -1,5 +1,6 @@
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryPostgres } from '@/lib/db/postgres';
+import { queryMySQL } from '@/lib/db/mysql';
 import type { DBType, ToolResponse, DatabaseCredentials } from '@/lib/types';
 
 type StoredProcedureRow = {
@@ -39,33 +40,67 @@ export async function listStoredProcedures(
         },
         error: null
       };
-    }
+    } else if (db === 'mssql') {
+      const result = await queryMSSQL(
+        `
+          SELECT SPECIFIC_SCHEMA,
+                 SPECIFIC_NAME
+          FROM INFORMATION_SCHEMA.ROUTINES
+          WHERE ROUTINE_TYPE = 'PROCEDURE'
+          ORDER BY SPECIFIC_SCHEMA, SPECIFIC_NAME
+        `,
+        {},
+        credentials?.mssql
+      );
 
-    const result = await queryMSSQL(
-      `
-        SELECT SPECIFIC_SCHEMA,
-               SPECIFIC_NAME
-        FROM INFORMATION_SCHEMA.ROUTINES
-        WHERE ROUTINE_TYPE = 'PROCEDURE'
-        ORDER BY SPECIFIC_SCHEMA, SPECIFIC_NAME
-      `,
-      {},
-      credentials?.mssql
-    );
+      const rows = result.rows as StoredProcedureRow[];
 
-    const rows = result.rows as StoredProcedureRow[];
+      return {
+        success: true,
+        data: {
+          procedures: rows.map((row) => ({
+            schema: String(row.SPECIFIC_SCHEMA ?? row.schema ?? ''),
+            name: String(row.SPECIFIC_NAME ?? row.name ?? '')
+          }))
+        },
+        error: null
+      };
+    } else if (db === 'mysql') {
+    const query = `
+      SELECT ROUTINE_SCHEMA,
+             ROUTINE_NAME
+      FROM INFORMATION_SCHEMA.ROUTINES
+      WHERE ROUTINE_TYPE = 'PROCEDURE'
+      ORDER BY ROUTINE_SCHEMA, ROUTINE_NAME
+    `;
+    
+    const result = (await queryMySQL(query, credentials)) as Array<{ ROUTINE_SCHEMA: string; ROUTINE_NAME: string }>;
 
     return {
       success: true,
       data: {
-        procedures: rows.map((row) => ({
-          schema: String(row.SPECIFIC_SCHEMA ?? row.schema ?? ''),
-          name: String(row.SPECIFIC_NAME ?? row.name ?? '')
+        procedures: result.map((row) => ({
+          schema: String(row.ROUTINE_SCHEMA ?? ''),
+          name: String(row.ROUTINE_NAME ?? '')
         }))
       },
       error: null
     };
-  } catch (error) {
+  } else if (db === 'sqlite') {
+    // SQLite doesn't have traditional stored procedures
+    return {
+      success: true,
+      data: { procedures: [] },
+      error: null
+    };
+  }
+
+  return {
+    success: false,
+    data: null,
+    error: 'Unsupported database type'
+  };
+} catch (error) {
     return {
       success: false,
       data: null,

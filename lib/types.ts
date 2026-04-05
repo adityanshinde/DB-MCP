@@ -1,4 +1,4 @@
-export type DBType = 'postgres' | 'mssql';
+export type DBType = 'postgres' | 'mssql' | 'mysql' | 'sqlite';
 
 export type ToolName =
   | 'run_query'
@@ -47,6 +47,16 @@ export type DatabaseCredentials = {
     password: string;
     database: string;
     port?: number;
+  };
+  mysql?: {
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    database: string;
+  };
+  sqlite?: {
+    filePath: string;
   };
 };
 

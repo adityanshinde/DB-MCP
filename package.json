@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "mssql": "^11.0.1",
+    "mysql2": "^3.6.0",
     "next": "^16.0.0",
     "pg": "^8.13.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
     "@types/mssql": "^9.1.11",
