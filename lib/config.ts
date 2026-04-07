@@ -13,7 +13,7 @@ export const CONFIG = {
     }
   },
   app: {
-    maxRows: 50,
+    maxRows: 500,
     allowedSchemas: ['public', 'dbo']
   }
 };
