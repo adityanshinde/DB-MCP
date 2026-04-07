@@ -9,11 +9,12 @@ export const CONFIG = {
     database: process.env.MSSQL_DATABASE || '',
     options: {
       encrypt: true,
-      trustServerCertificate: true
+      trustServerCertificate: false
     }
   },
   app: {
-    maxRows: 500,
+    maxRows: 50,
+    previewRows: 5,
     allowedSchemas: ['public', 'dbo']
   }
 };

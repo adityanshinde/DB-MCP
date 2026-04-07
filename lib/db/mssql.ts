@@ -40,7 +40,7 @@ function getDynamicPool(credentials: DatabaseCredentials['mssql']): Promise<sql.
     database: credentials.database,
     options: {
       encrypt: true,
-      trustServerCertificate: true
+      trustServerCertificate: false
     },
     pool: {
       max: 5,

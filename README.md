@@ -54,11 +54,13 @@ The backend never connects to databases in write mode and rejects unsafe SQL bef
 All runtime settings are controlled from one place only: `.env` and `lib/config.ts`.
 
 ```env
-POSTGRES_URL=postgresql://user:password@host:5432/database
+POSTGRES_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
 MSSQL_USER=readonly_user
-MSSQL_PASSWORD=your_password
-MSSQL_SERVER=your_server
-MSSQL_DATABASE=your_database
+MSSQL_PASSWORD=replace_me
+MSSQL_SERVER=database.example.com
+MSSQL_DATABASE=database_name
+MCP_UI_ORIGIN=https://your-allowed-ui.example.com
+SQLITE_ALLOWED_DIR=C:\path\to\allowed\sqlite\dir
 ```
 
 ## Centralized config behavior
@@ -128,6 +130,8 @@ https://your-vercel-domain.vercel.app/api/mcp
 
 4. Save the connector and authenticate if your deployment requires it.
 
+Set `MCP_UI_ORIGIN` to the exact UI origin you want to allow; wildcard origins are not used.
+
 If you are testing locally, use your dev server URL instead:
 
 ```text
@@ -143,8 +147,26 @@ Claude will see these tools through the MCP protocol:
 - `run_query`
 - `list_tables`
 - `search_tables`
+- `search_columns`
 - `get_table_schema`
+- `get_table_summary`
 - `get_view_definition`
+- `get_view_summary`
+- `get_procedure_summary`
+- `get_function_summary`
+- `get_sample_rows`
+- `explain_query`
+- `compare_schema`
+- `get_column_stats`
+- `search_views`
+- `get_row_count`
+- `get_foreign_key_summary`
+- `search_functions`
+- `search_procedures`
+- `get_table_sample_by_columns`
+- `get_dependency_graph`
+- `get_relation_path`
+- `compare_object_versions`
 - `get_relationships`
 - `get_indexes`
 - `get_constraints`

@@ -1,7 +1,38 @@
 import sqlite3 from 'sqlite3';
+import path from 'node:path';
 import type { DatabaseCredentials } from '@/lib/types';
 
 let defaultDb: sqlite3.Database | null = null;
+
+function quoteSqliteIdentifier(identifier: string): string {
+  return `"${identifier.replace(/"/g, '""')}"`;
+}
+
+function resolveSQLitePath(filePath: string): string {
+  const trimmed = filePath.trim();
+
+  if (!trimmed) {
+    throw new Error('SQLite file path is required.');
+  }
+
+  if (trimmed === ':memory:') {
+    return trimmed;
+  }
+
+  if (trimmed.includes('\0')) {
+    throw new Error('SQLite file path contains invalid characters.');
+  }
+
+  const allowedBaseDir = path.resolve(process.env.SQLITE_ALLOWED_DIR || process.cwd());
+  const resolvedPath = path.isAbsolute(trimmed) ? path.normalize(trimmed) : path.resolve(allowedBaseDir, trimmed);
+  const relativePath = path.relative(allowedBaseDir, resolvedPath);
+
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    throw new Error(`SQLite file path must be inside the allowed directory: ${allowedBaseDir}`);
+  }
+
+  return resolvedPath;
+}
 
 function getDefaultDatabase(): Promise<sqlite3.Database> {
   return new Promise((resolve, reject) => {
@@ -28,7 +59,7 @@ function getDynamicDatabase(credentials: DatabaseCredentials): Promise<sqlite3.D
       return;
     }
 
-    const db = new sqlite3.Database(credentials.sqlite.filePath, (err) => {
+    const db = new sqlite3.Database(resolveSQLitePath(credentials.sqlite.filePath), (err) => {
       if (err) reject(err);
       else resolve(db);
     });
@@ -73,7 +104,7 @@ export async function getSchemaSQLite(
   const db = await (credentials ? getDynamicDatabase(credentials) : getDefaultDatabase());
 
   return new Promise((resolve, reject) => {
-    db.all(`PRAGMA table_info(${table})`, (err: Error | null, rows: Array<{ name: string; type: string; notnull: number }>) => {
+    db.all(`PRAGMA table_info(${quoteSqliteIdentifier(table)})`, (err: Error | null, rows: Array<{ name: string; type: string; notnull: number }>) => {
       if (err) reject(err);
       else {
         resolve(
@@ -130,7 +161,7 @@ export async function getRelationshipsSQLite(
 
       for (const tbl of tables) {
         const fks = await new Promise<Array<{ id: number; table: string; from: string; to: string }>>((res, rej) => {
-          db.all(`PRAGMA foreign_key_list(${tbl})`, (err: Error | null, rows: unknown[]) => {
+          db.all(`PRAGMA foreign_key_list(${quoteSqliteIdentifier(tbl)})`, (err: Error | null, rows: unknown[]) => {
             if (err) rej(err);
             else res((rows || []) as Array<{ id: number; table: string; from: string; to: string }>);
           });

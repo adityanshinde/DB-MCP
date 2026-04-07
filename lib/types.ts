@@ -6,8 +6,26 @@ export type ToolName =
   | 'run_query'
   | 'list_tables'
   | 'search_tables'
+  | 'search_columns'
   | 'get_table_schema'
+  | 'get_table_summary'
   | 'get_view_definition'
+  | 'get_view_summary'
+  | 'get_procedure_summary'
+  | 'get_function_summary'
+  | 'get_sample_rows'
+  | 'explain_query'
+  | 'compare_schema'
+  | 'get_column_stats'
+  | 'search_views'
+  | 'get_row_count'
+  | 'get_foreign_key_summary'
+  | 'search_functions'
+  | 'search_procedures'
+  | 'get_table_sample_by_columns'
+  | 'get_dependency_graph'
+  | 'compare_object_versions'
+  | 'get_relation_path'
   | 'get_relationships'
   | 'get_indexes'
   | 'get_constraints'
@@ -36,15 +54,140 @@ export type SearchTablesInput = {
   schema?: string;
 };
 
-export type GetIndexesInput = {
+export type SearchColumnsInput = {
   db: DBType;
-  table?: string;
+  query: string;
+  schema?: string;
+  limit?: number;
+};
+
+export type GetTableSummaryInput = {
+  db: DBType;
+  table: string;
+  schema?: string;
+};
+
+export type GetViewSummaryInput = {
+  db: DBType;
+  view: string;
   schema?: string;
 };
 
 export type GetViewDefinitionInput = {
   db: DBType;
   view: string;
+  schema?: string;
+};
+
+export type GetProcedureSummaryInput = {
+  db: DBType;
+  procedure: string;
+  schema?: string;
+};
+
+export type GetFunctionSummaryInput = {
+  db: DBType;
+  func: string;
+  schema?: string;
+};
+
+export type GetSampleRowsInput = {
+  db: DBType;
+  table: string;
+  schema?: string;
+  limit?: number;
+};
+
+export type ExplainQueryInput = {
+  db: DBType;
+  query: string;
+};
+
+export type CompareSchemaInput = {
+  db: DBType;
+  left_table: string;
+  right_table: string;
+  left_schema?: string;
+  right_schema?: string;
+};
+
+export type GetColumnStatsInput = {
+  db: DBType;
+  table: string;
+  schema?: string;
+  limit?: number;
+};
+
+export type SearchViewsInput = {
+  db: DBType;
+  query: string;
+  schema?: string;
+  limit?: number;
+};
+
+export type GetRowCountInput = {
+  db: DBType;
+  table: string;
+  schema?: string;
+};
+
+export type GetForeignKeySummaryInput = {
+  db: DBType;
+  table?: string;
+  schema?: string;
+  limit?: number;
+};
+
+export type SearchFunctionsInput = {
+  db: DBType;
+  query: string;
+  schema?: string;
+  limit?: number;
+};
+
+export type SearchProceduresInput = {
+  db: DBType;
+  query: string;
+  schema?: string;
+  limit?: number;
+};
+
+export type GetTableSampleByColumnsInput = {
+  db: DBType;
+  table: string;
+  schema?: string;
+  columns?: string[];
+  limit?: number;
+};
+
+export type GetDependencyGraphInput = {
+  db: DBType;
+  table?: string;
+  schema?: string;
+  limit?: number;
+};
+
+export type CompareObjectVersionsInput = {
+  db: DBType;
+  object_type: 'table' | 'view' | 'procedure' | 'function';
+  left_name: string;
+  right_name: string;
+  schema?: string;
+  left_schema?: string;
+  right_schema?: string;
+};
+
+export type GetRelationPathInput = {
+  db: DBType;
+  source_table: string;
+  target_table: string;
+  schema?: string;
+  limit?: number;
+};
+
+export type GetIndexesInput = {
+  db: DBType;
+  table?: string;
   schema?: string;
 };
 
@@ -104,8 +247,26 @@ export type ToolInputMap = {
   run_query: RunQueryInput;
   list_tables: ListTablesInput;
   search_tables: SearchTablesInput;
+  search_columns: SearchColumnsInput;
   get_table_schema: GetTableSchemaInput;
+  get_table_summary: GetTableSummaryInput;
   get_view_definition: GetViewDefinitionInput;
+  get_view_summary: GetViewSummaryInput;
+  get_procedure_summary: GetProcedureSummaryInput;
+  get_function_summary: GetFunctionSummaryInput;
+  get_sample_rows: GetSampleRowsInput;
+  explain_query: ExplainQueryInput;
+  compare_schema: CompareSchemaInput;
+  get_column_stats: GetColumnStatsInput;
+  search_views: SearchViewsInput;
+  get_row_count: GetRowCountInput;
+  get_foreign_key_summary: GetForeignKeySummaryInput;
+  search_functions: SearchFunctionsInput;
+  search_procedures: SearchProceduresInput;
+  get_table_sample_by_columns: GetTableSampleByColumnsInput;
+  get_dependency_graph: GetDependencyGraphInput;
+  compare_object_versions: CompareObjectVersionsInput;
+  get_relation_path: GetRelationPathInput;
   get_relationships: GetRelationshipsInput;
   get_indexes: GetIndexesInput;
   get_constraints: GetConstraintsInput;

@@ -1,4 +1,4 @@
-const BLOCKED_KEYWORDS = /\b(insert|update|delete|drop|alter|truncate|merge|create|replace|rename|call|execute|exec|grant|revoke|deny)\b|\bxp_/i;
+const BLOCKED_KEYWORDS = /\b(insert|update|delete|drop|alter|truncate|merge|create|replace|rename|call|execute|exec|grant|revoke|deny|into|openquery|openrowset|sp_executesql)\b|\bxp_/i;
 
 export function validateReadOnlyQuery(query: string): string {
   const normalized = query.trim();

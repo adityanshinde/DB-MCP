@@ -5,14 +5,32 @@ import type { CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 
 import { getConstraints } from '@/lib/tools/getConstraints';
+import { compareSchema } from '@/lib/tools/compareSchema';
+import { getForeignKeySummary } from '@/lib/tools/getForeignKeySummary';
 import { getDatabaseInfo } from '@/lib/tools/getDatabaseInfo';
+import { getColumnStats } from '@/lib/tools/getColumnStats';
+import { compareObjectVersions } from '@/lib/tools/compareObjectVersions';
+import { getDependencyGraph } from '@/lib/tools/getDependencyGraph';
+import { getFunctionSummary } from '@/lib/tools/getFunctionSummary';
 import { getIndexes } from '@/lib/tools/getIndexes';
+import { getRelationPath } from '@/lib/tools/getRelationPath';
+import { getProcedureSummary } from '@/lib/tools/getProcedureSummary';
 import { getRelationships } from '@/lib/tools/getRelationships';
+import { getSampleRows } from '@/lib/tools/getSampleRows';
+import { explainQuery } from '@/lib/tools/explainQuery';
 import { getTableSchema } from '@/lib/tools/getSchema';
+import { getTableSampleByColumns } from '@/lib/tools/getTableSampleByColumns';
+import { getTableSummary } from '@/lib/tools/getTableSummary';
+import { getViewSummary } from '@/lib/tools/getViewSummary';
 import { listSchemas } from '@/lib/tools/listSchemas';
 import { listStoredProcedures } from '@/lib/tools/listStoredProcedures';
 import { listTables } from '@/lib/tools/listTables';
+import { getRowCount } from '@/lib/tools/getRowCount';
 import { searchTables } from '@/lib/tools/searchTables';
+import { searchViews } from '@/lib/tools/searchViews';
+import { searchFunctions } from '@/lib/tools/searchFunctions';
+import { searchProcedures } from '@/lib/tools/searchProcedures';
+import { searchColumns } from '@/lib/tools/searchColumns';
 import { getViewDefinition } from '@/lib/tools/getViewDefinition';
 import { runQuery } from '@/lib/tools/runQuery';
 import type { ToolRequestWithCredentials, ToolResponse } from '@/lib/types';
@@ -20,9 +38,9 @@ import type { ToolRequestWithCredentials, ToolResponse } from '@/lib/types';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_ORIGIN = process.env.MCP_UI_ORIGIN || '*';
+const ALLOWED_ORIGIN = process.env.MCP_UI_ORIGIN?.trim() || '';
 const ALLOWED_METHODS = 'POST, GET, DELETE, OPTIONS';
-const ALLOWED_HEADERS = 'Content-Type, MCP-Protocol-Version, Mcp-Session-Id, Authorization';
+const ALLOWED_HEADERS = 'Content-Type, MCP-Protocol-Version, Mcp-Session-Id';
 const SUPPORTED_DATABASES = ['postgres', 'mssql', 'mysql', 'sqlite'] as const;
 
 let transport: WebStandardStreamableHTTPServerTransport | null = null;
@@ -30,7 +48,10 @@ let mcpReady: Promise<void> | null = null;
 
 function withCors(response: Response): Response {
   const headers = new Headers(response.headers);
-  headers.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+  if (ALLOWED_ORIGIN) {
+    headers.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+    headers.set('Vary', 'Origin');
+  }
   headers.set('Access-Control-Allow-Methods', ALLOWED_METHODS);
   headers.set('Access-Control-Allow-Headers', ALLOWED_HEADERS);
   return new Response(response.body, {
@@ -187,6 +208,90 @@ function createMcpServer(): McpServer {
   );
 
   server.registerTool(
+    'search_views',
+    {
+      title: 'Search Views',
+      description: 'Search for views by partial name with a small capped result set.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        query: z.string().min(1),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(20).default(10)
+      })
+    },
+    async ({ db, query, schema, limit }) => toTextResult(await searchViews(db, query, schema, limit))
+  );
+
+  server.registerTool(
+    'search_functions',
+    {
+      title: 'Search Functions',
+      description: 'Search for functions by partial name with a small capped result set.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        query: z.string().min(1),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(20).default(10)
+      })
+    },
+    async ({ db, query, schema, limit }) => toTextResult(await searchFunctions(db, query, schema, limit))
+  );
+
+  server.registerTool(
+    'search_procedures',
+    {
+      title: 'Search Procedures',
+      description: 'Search for stored procedures by partial name with a small capped result set.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        query: z.string().min(1),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(20).default(10)
+      })
+    },
+    async ({ db, query, schema, limit }) => toTextResult(await searchProcedures(db, query, schema, limit))
+  );
+
+  server.registerTool(
+    'search_columns',
+    {
+      title: 'Search Columns',
+      description: 'Search for columns by partial name with a small capped result set.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        query: z.string().min(1),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(20).default(10)
+      })
+    },
+    async ({ db, query, schema, limit }) => toTextResult(await searchColumns(db, query, schema, limit))
+  );
+
+  server.registerTool(
     'get_table_schema',
     {
       title: 'Get Table Schema',
@@ -204,6 +309,26 @@ function createMcpServer(): McpServer {
       })
     },
     async ({ db, table, schema }) => toTextResult(await getTableSchema(db, table, schema))
+  );
+
+  server.registerTool(
+    'get_table_summary',
+    {
+      title: 'Get Table Summary',
+      description: 'Return a compact table summary with only preview columns and key metadata.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().min(1),
+        schema: z.string().optional()
+      })
+    },
+    async ({ db, table, schema }) => toTextResult(await getTableSummary(db, table, schema))
   );
 
   server.registerTool(
@@ -227,6 +352,239 @@ function createMcpServer(): McpServer {
   );
 
   server.registerTool(
+    'get_view_summary',
+    {
+      title: 'Get View Summary',
+      description: 'Return a compact view summary with preview columns and a truncated definition.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        view: z.string().min(1),
+        schema: z.string().optional()
+      })
+    },
+    async ({ db, view, schema }) => toTextResult(await getViewSummary(db, view, schema))
+  );
+
+  server.registerTool(
+    'get_procedure_summary',
+    {
+      title: 'Get Procedure Summary',
+      description: 'Return a compact stored procedure summary with a short signature and parameters.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        procedure: z.string().min(1),
+        schema: z.string().optional()
+      })
+    },
+    async ({ db, procedure, schema }) => toTextResult(await getProcedureSummary(db, procedure, schema))
+  );
+
+  server.registerTool(
+    'get_function_summary',
+    {
+      title: 'Get Function Summary',
+      description: 'Return a compact function summary with a short signature and parameters.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        func: z.string().min(1),
+        schema: z.string().optional()
+      })
+    },
+    async ({ db, func, schema }) => toTextResult(await getFunctionSummary(db, func, schema))
+  );
+
+  server.registerTool(
+    'get_sample_rows',
+    {
+      title: 'Get Sample Rows',
+      description: 'Return a small capped sample of rows for a table.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().min(1),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(5).default(5)
+      })
+    },
+    async ({ db, table, schema, limit }) => toTextResult(await getSampleRows(db, table, schema, limit))
+  );
+
+  server.registerTool(
+    'get_table_sample_by_columns',
+    {
+      title: 'Get Table Sample By Columns',
+      description: 'Return a tiny sample of selected columns only, to save tokens.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().min(1),
+        schema: z.string().optional(),
+        columns: z.array(z.string().min(1)).optional(),
+        limit: z.number().int().min(1).max(5).default(5)
+      })
+    },
+    async ({ db, table, schema, columns, limit }) =>
+      toTextResult(await getTableSampleByColumns(db, table, schema, columns, limit))
+  );
+
+  server.registerTool(
+    'get_row_count',
+    {
+      title: 'Get Row Count',
+      description: 'Return the exact row count for a table without returning any rows.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().min(1),
+        schema: z.string().optional()
+      })
+    },
+    async ({ db, table, schema }) => toTextResult(await getRowCount(db, table, schema))
+  );
+
+  server.registerTool(
+    'explain_query',
+    {
+      title: 'Explain Query',
+      description: 'Return a compact execution plan for a read-only query.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        query: z.string().min(1)
+      })
+    },
+    async ({ db, query }) => toTextResult(await explainQuery(db, query))
+  );
+
+  server.registerTool(
+    'compare_schema',
+    {
+      title: 'Compare Schema',
+      description: 'Compare two table schemas and return only the structural differences.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        left_table: z.string().min(1),
+        right_table: z.string().min(1),
+        left_schema: z.string().optional(),
+        right_schema: z.string().optional()
+      })
+    },
+    async ({ db, left_table, right_table, left_schema, right_schema }) =>
+      toTextResult(await compareSchema(db, left_table, right_table, left_schema, right_schema))
+  );
+
+  server.registerTool(
+    'compare_object_versions',
+    {
+      title: 'Compare Object Versions',
+      description: 'Compare two tables, views, procedures, or functions and return only the compact differences.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        object_type: z.enum(['table', 'view', 'procedure', 'function']),
+        left_name: z.string().min(1),
+        right_name: z.string().min(1),
+        schema: z.string().optional(),
+        left_schema: z.string().optional(),
+        right_schema: z.string().optional()
+      })
+    },
+    async ({ db, object_type, left_name, right_name, schema, left_schema, right_schema }) =>
+      toTextResult(await compareObjectVersions(db, object_type, left_name, right_name, schema, left_schema, right_schema))
+  );
+
+  server.registerTool(
+    'get_dependency_graph',
+    {
+      title: 'Get Dependency Graph',
+      description: 'Return a compact foreign-key dependency graph with nodes and edges only.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().optional(),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(20).default(10)
+      })
+    },
+    async ({ db, table, schema, limit }) => toTextResult(await getDependencyGraph(db, table, schema, limit))
+  );
+
+  server.registerTool(
+    'get_column_stats',
+    {
+      title: 'Get Column Stats',
+      description: 'Return compact row and cardinality stats for a few table columns.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().min(1),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(5).default(5)
+      })
+    },
+    async ({ db, table, schema, limit }) => toTextResult(await getColumnStats(db, table, schema, limit))
+  );
+
+  server.registerTool(
     'get_relationships',
     {
       title: 'Get Relationships',
@@ -244,6 +602,29 @@ function createMcpServer(): McpServer {
       })
     },
     async ({ db, table, schema }) => toTextResult(await getRelationships(db, table, schema))
+  );
+
+  server.registerTool(
+    'get_relation_path',
+    {
+      title: 'Get Relation Path',
+      description: 'Find a compact foreign-key path between two tables using existing relationship data.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        source_table: z.string().min(1),
+        target_table: z.string().min(1),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(20).default(10)
+      })
+    },
+    async ({ db, source_table, target_table, schema, limit }) =>
+      toTextResult(await getRelationPath(db, source_table, target_table, schema, limit))
   );
 
   server.registerTool(
@@ -379,6 +760,16 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
+      case 'search_columns': {
+        const input = body.input as ToolRequestWithCredentials<'search_columns'>['input'];
+        if (!input?.db || !input?.query) {
+          return withCors(jsonError('search_columns requires db and query.', 400));
+        }
+
+        const result = await searchColumns(input.db, input.query, input.schema, input.limit, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
       case 'search_tables': {
         const input = body.input as ToolRequestWithCredentials<'search_tables'>['input'];
         if (!input?.db || !input?.query) {
@@ -386,6 +777,16 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         }
 
         const result = await searchTables(input.db, input.query, input.schema, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'search_procedures': {
+        const input = body.input as ToolRequestWithCredentials<'search_procedures'>['input'];
+        if (!input?.db || !input?.query) {
+          return withCors(jsonError('search_procedures requires db and query.', 400));
+        }
+
+        const result = await searchProcedures(input.db, input.query, input.schema, input.limit, body.credentials);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
@@ -399,6 +800,16 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
+      case 'get_table_summary': {
+        const input = body.input as ToolRequestWithCredentials<'get_table_summary'>['input'];
+        if (!input?.db || !input?.table) {
+          return withCors(jsonError('get_table_summary requires db and table.', 400));
+        }
+
+        const result = await getTableSummary(input.db, input.table, input.schema, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
       case 'get_view_definition': {
         const input = body.input as ToolRequestWithCredentials<'get_view_definition'>['input'];
         if (!input?.db || !input?.view) {
@@ -409,6 +820,75 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
+      case 'get_view_summary': {
+        const input = body.input as ToolRequestWithCredentials<'get_view_summary'>['input'];
+        if (!input?.db || !input?.view) {
+          return withCors(jsonError('get_view_summary requires db and view.', 400));
+        }
+
+        const result = await getViewSummary(input.db, input.view, input.schema, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'get_procedure_summary': {
+        const input = body.input as ToolRequestWithCredentials<'get_procedure_summary'>['input'];
+        if (!input?.db || !input?.procedure) {
+          return withCors(jsonError('get_procedure_summary requires db and procedure.', 400));
+        }
+
+        const result = await getProcedureSummary(input.db, input.procedure, input.schema, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'get_function_summary': {
+        const input = body.input as ToolRequestWithCredentials<'get_function_summary'>['input'];
+        if (!input?.db || !input?.func) {
+          return withCors(jsonError('get_function_summary requires db and func.', 400));
+        }
+
+        const result = await getFunctionSummary(input.db, input.func, input.schema, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'compare_object_versions': {
+        const input = body.input as ToolRequestWithCredentials<'compare_object_versions'>['input'];
+        if (!input?.db || !input?.object_type || !input?.left_name || !input?.right_name) {
+          return withCors(jsonError('compare_object_versions requires db, object_type, left_name, and right_name.', 400));
+        }
+
+        const result = await compareObjectVersions(
+          input.db,
+          input.object_type,
+          input.left_name,
+          input.right_name,
+          input.schema,
+          input.left_schema,
+          input.right_schema,
+          body.credentials
+        );
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'get_sample_rows': {
+        const input = body.input as ToolRequestWithCredentials<'get_sample_rows'>['input'];
+        if (!input?.db || !input?.table) {
+          return withCors(jsonError('get_sample_rows requires db and table.', 400));
+        }
+
+        const result = await getSampleRows(input.db, input.table, input.schema, input.limit, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'explain_query': {
+        const input = body.input as ToolRequestWithCredentials<'explain_query'>['input'];
+        if (!input?.db || !input?.query) {
+          return withCors(jsonError('explain_query requires db and query.', 400));
+        }
+
+        const result = await explainQuery(input.db, input.query, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
       case 'get_relationships': {
         const input = body.input as ToolRequestWithCredentials<'get_relationships'>['input'];
         if (!input?.db) {
@@ -416,6 +896,16 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         }
 
         const result = await getRelationships(input.db, input.table, input.schema, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'get_relation_path': {
+        const input = body.input as ToolRequestWithCredentials<'get_relation_path'>['input'];
+        if (!input?.db || !input?.source_table || !input?.target_table) {
+          return withCors(jsonError('get_relation_path requires db, source_table, and target_table.', 400));
+        }
+
+        const result = await getRelationPath(input.db, input.source_table, input.target_table, input.schema, input.limit, body.credentials);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
