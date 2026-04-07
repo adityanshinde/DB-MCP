@@ -37,12 +37,13 @@ function getDynamicDatabase(credentials: DatabaseCredentials): Promise<sqlite3.D
 
 export async function querySQLite(
   query: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  params: unknown[] = []
 ): Promise<unknown> {
   const db = await (credentials ? getDynamicDatabase(credentials) : getDefaultDatabase());
 
   return new Promise((resolve, reject) => {
-    db.all(query, (err: Error | null, rows: unknown[]) => {
+    db.all(query, params, (err: Error | null, rows: unknown[]) => {
       if (err) reject(err);
       else resolve(rows || []);
     });

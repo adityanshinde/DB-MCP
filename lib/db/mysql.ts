@@ -45,13 +45,14 @@ function getDynamicPool(credentials: DatabaseCredentials): mysql.Pool {
 
 export async function queryMySQL(
   query: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  params: unknown[] = []
 ): Promise<unknown> {
   const pool = credentials ? getDynamicPool(credentials) : getDefaultPool();
   const connection = await pool.getConnection();
 
   try {
-    const [rows] = await connection.query(query);
+    const [rows] = await connection.query(query, params);
     return rows;
   } finally {
     connection.release();

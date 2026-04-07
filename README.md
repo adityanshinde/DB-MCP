@@ -1,16 +1,17 @@
 # MCP Database Server
 
-This project is the backend MCP server for safe, read-only access to PostgreSQL and MSSQL.
-It is built with Next.js App Router, TypeScript, and Node runtime only.
+This project is a remote MCP server for safe, read-only database access.
+It is built with Next.js App Router, TypeScript, and a Node.js runtime so it can run on Vercel.
 
 ## What this project does
 
-The server exposes a single MCP-style HTTP endpoint at `/api/mcp`.
-AI agents or frontends can use it to:
+The server exposes a Claude-compatible remote MCP endpoint at `/api/mcp`.
+Claude or any MCP client can use it to:
 
 - list tables
 - inspect table schemas
 - inspect foreign-key relationships
+- list stored procedures
 - run safe read-only SQL queries
 
 The backend never connects to databases in write mode and rejects unsafe SQL before execution.
@@ -20,6 +21,7 @@ The backend never connects to databases in write mode and rejects unsafe SQL bef
 - Next.js App Router
 - TypeScript
 - Node.js runtime
+- MCP server SDK
 - PostgreSQL driver: `pg`
 - MSSQL driver: `mssql`
 - No ORM
@@ -34,6 +36,7 @@ The backend never connects to databases in write mode and rejects unsafe SQL bef
 - `lib/tools/listTables.ts` - list tables tool
 - `lib/tools/getSchema.ts` - table schema tool
 - `lib/tools/getRelationships.ts` - FK relationship discovery tool
+- `lib/tools/listStoredProcedures.ts` - stored procedure listing tool
 - `lib/validators/queryValidator.ts` - read-only SQL validation
 - `lib/types.ts` - shared types for requests and responses
 
@@ -107,7 +110,49 @@ Returns column metadata for a selected table.
 
 Returns foreign-key relationships using system catalogs.
 
-## API contract
+### 5. `list_stored_procedures`
+
+Lists stored procedures where the connected database supports them.
+
+## Connect Claude
+
+Use the deployed HTTPS endpoint as a remote MCP server URL in Claude.
+
+1. Open Claude's connector setup.
+2. Choose the custom connector option.
+3. Paste your deployed endpoint URL, for example:
+
+```text
+https://your-vercel-domain.vercel.app/api/mcp
+```
+
+4. Save the connector and authenticate if your deployment requires it.
+
+If you are testing locally, use your dev server URL instead:
+
+```text
+http://localhost:3000/api/mcp
+```
+
+## MCP tools
+
+Claude will see these tools through the MCP protocol:
+
+- `list_schemas`
+- `get_database_info`
+- `run_query`
+- `list_tables`
+- `search_tables`
+- `get_table_schema`
+- `get_view_definition`
+- `get_relationships`
+- `get_indexes`
+- `get_constraints`
+- `list_stored_procedures`
+
+The endpoint also keeps the previous custom JSON body format for backwards compatibility.
+
+## Legacy API contract
 
 Send a POST request to `/api/mcp` with this shape:
 
@@ -164,6 +209,17 @@ Example tool requests:
   "input": {
     "db": "postgres",
     "schema": "public"
+  }
+}
+```
+
+### list_stored_procedures
+
+```json
+{
+  "tool": "list_stored_procedures",
+  "input": {
+    "db": "postgres"
   }
 }
 ```
@@ -253,6 +309,7 @@ Use the `list_tables` payload for either database.
 
 ## Troubleshooting
 
+- Make sure the Claude connector URL is the deployed HTTPS endpoint, not the repo URL
 - If the server says a DB is not configured, check `.env`
 - If queries are rejected, verify that they start with `SELECT`, `WITH`, or `EXPLAIN`
 - If schemas are rejected, confirm the schema is in the allowed list

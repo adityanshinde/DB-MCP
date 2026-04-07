@@ -1,10 +1,16 @@
 export type DBType = 'postgres' | 'mssql' | 'mysql' | 'sqlite';
 
 export type ToolName =
+  | 'list_schemas'
+  | 'get_database_info'
   | 'run_query'
   | 'list_tables'
+  | 'search_tables'
   | 'get_table_schema'
+  | 'get_view_definition'
   | 'get_relationships'
+  | 'get_indexes'
+  | 'get_constraints'
   | 'list_stored_procedures';
 
 export type RunQueryInput = {
@@ -14,6 +20,38 @@ export type RunQueryInput = {
 
 export type ListTablesInput = {
   db: DBType;
+};
+
+export type ListSchemasInput = {
+  db: DBType;
+};
+
+export type GetDatabaseInfoInput = {
+  db: DBType;
+};
+
+export type SearchTablesInput = {
+  db: DBType;
+  query: string;
+  schema?: string;
+};
+
+export type GetIndexesInput = {
+  db: DBType;
+  table?: string;
+  schema?: string;
+};
+
+export type GetViewDefinitionInput = {
+  db: DBType;
+  view: string;
+  schema?: string;
+};
+
+export type GetConstraintsInput = {
+  db: DBType;
+  table?: string;
+  schema?: string;
 };
 
 export type ListStoredProceduresInput = {
@@ -61,10 +99,16 @@ export type DatabaseCredentials = {
 };
 
 export type ToolInputMap = {
+  list_schemas: ListSchemasInput;
+  get_database_info: GetDatabaseInfoInput;
   run_query: RunQueryInput;
   list_tables: ListTablesInput;
+  search_tables: SearchTablesInput;
   get_table_schema: GetTableSchemaInput;
+  get_view_definition: GetViewDefinitionInput;
   get_relationships: GetRelationshipsInput;
+  get_indexes: GetIndexesInput;
+  get_constraints: GetConstraintsInput;
   list_stored_procedures: ListStoredProceduresInput;
 };
 
