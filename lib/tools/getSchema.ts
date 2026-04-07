@@ -1,4 +1,5 @@
 import { CONFIG } from '@/lib/config';
+import { METADATA_CACHE_TTLS, readThroughMetadataCache } from '@/lib/cache/metadataCache';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryPostgres } from '@/lib/db/postgres';
 import { getSchemaMySQL } from '@/lib/db/mysql';
@@ -25,75 +26,77 @@ export async function getTableSchema(
   try {
     const resolvedSchema = resolveSchema(db, schema);
 
-    if (db === 'postgres') {
-      const result = await queryPostgres(
-        `SELECT column_name, data_type, is_nullable, column_default, ordinal_position
-         FROM information_schema.columns
-         WHERE table_name = $1 AND table_schema = $2
-         ORDER BY ordinal_position`,
-        [table, resolvedSchema],
-        credentials?.postgres
-      );
+    const data = await readThroughMetadataCache({
+      db,
+      tool: 'getTableSchema',
+      schema: resolvedSchema,
+      params: { table },
+      credentials,
+      ttlSeconds: METADATA_CACHE_TTLS.tableSchema,
+      fetcher: async () => {
+        if (db === 'postgres') {
+          const result = await queryPostgres(
+            `SELECT column_name, data_type, is_nullable, column_default, ordinal_position
+             FROM information_schema.columns
+             WHERE table_name = $1 AND table_schema = $2
+             ORDER BY ordinal_position`,
+            [table, resolvedSchema],
+            credentials?.postgres
+          );
 
-      return {
-        success: true,
-        data: {
-          table,
-          schema: resolvedSchema,
-          columns: result.rows
-        },
-        error: null
-      };
-    } else if (db === 'mssql') {
-      const result = await queryMSSQL(
-        `SELECT column_name, data_type, is_nullable, ordinal_position
-         FROM information_schema.columns
-         WHERE table_name = @tableName AND table_schema = @schemaName
-         ORDER BY ordinal_position`,
-        {
-          tableName: table,
-          schemaName: resolvedSchema
-        },
-        credentials?.mssql
-      );
+          return {
+            table,
+            schema: resolvedSchema,
+            columns: result.rows
+          };
+        }
 
-      return {
-        success: true,
-        data: {
-          table,
-          schema: resolvedSchema,
-          columns: result.rows
-        },
-        error: null
-      };
-    } else if (db === 'mysql') {
-    const columns = await getSchemaMySQL(table, credentials);
+        if (db === 'mssql') {
+          const result = await queryMSSQL(
+            `SELECT column_name, data_type, is_nullable, ordinal_position
+             FROM information_schema.columns
+             WHERE table_name = @tableName AND table_schema = @schemaName
+             ORDER BY ordinal_position`,
+            {
+              tableName: table,
+              schemaName: resolvedSchema
+            },
+            credentials?.mssql
+          );
+
+          return {
+            table,
+            schema: resolvedSchema,
+            columns: result.rows
+          };
+        }
+
+        if (db === 'mysql') {
+          const columns = await getSchemaMySQL(table, credentials);
+          return {
+            table,
+            schema: 'default',
+            columns: columns as Array<Record<string, unknown>>
+          };
+        }
+
+        if (db === 'sqlite') {
+          const columns = await getSchemaSQLite(table, credentials);
+          return {
+            table,
+            schema: 'default',
+            columns: columns as Array<Record<string, unknown>>
+          };
+        }
+
+        throw new Error('Unsupported database type');
+      }
+    });
+
     return {
       success: true,
-      data: {
-        table,
-        schema: 'default',
-        columns: columns as Array<Record<string, unknown>>
-      },
+      data,
       error: null
-    };
-    } else if (db === 'sqlite') {
-      const columns = await getSchemaSQLite(table, credentials);
-      return {
-        success: true,
-        data: {
-          table,
-          schema: 'default',
-          columns: columns as Array<Record<string, unknown>>
-        },
-        error: null
-      };
-    }
-
-    return {
-      success: false,
-      data: null,
-      error: 'Unsupported database type'
     };
   } catch (error) {
     return {

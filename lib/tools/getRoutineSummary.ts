@@ -1,3 +1,4 @@
+import { METADATA_CACHE_TTLS, readThroughMetadataCache } from '@/lib/cache/metadataCache';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryMySQL } from '@/lib/db/mysql';
 import { queryPostgres } from '@/lib/db/postgres';
@@ -121,34 +122,42 @@ export async function getRoutineSummary(
         error: null
       };
     }
+    const resolvedSchema = normalizeSchemaFilter(db, schema);
+    const data = await readThroughMetadataCache({
+      db,
+      tool: 'getRoutineSummary',
+      schema: resolvedSchema,
+      params: { kind, name },
+      credentials,
+      ttlSeconds: METADATA_CACHE_TTLS.summary,
+      fetcher: async () => {
+        const routine = await getRoutineRow(db, kind, name, schema, credentials);
+        const parameters = await getParameters(db, name, schema, credentials);
 
-    const routine = await getRoutineRow(db, kind, name, schema, credentials);
-    const parameters = await getParameters(db, name, schema, credentials);
+        if (!routine) {
+          return { supported: true, routine: null, parameters: [] };
+        }
 
-    if (!routine) {
-      return {
-        success: true,
-        data: { supported: true, routine: null, parameters: [] },
-        error: null
-      };
-    }
+        const routineRecord = routine as Record<string, unknown>;
+        const definitionPreview = 'routine_definition' in routine ? truncateText(String(routine.routine_definition ?? ''), 200) : undefined;
 
-    const routineRecord = routine as Record<string, unknown>;
-    const definitionPreview = 'routine_definition' in routine ? truncateText(String(routine.routine_definition ?? ''), 200) : undefined;
+        return {
+          supported: true,
+          routine: {
+            schema: String(routineRecord.routine_schema ?? routineRecord.schema ?? resolvedSchema),
+            name: String(routineRecord.routine_name ?? routineRecord.name ?? ''),
+            routine_type: String(routineRecord.routine_type ?? kind),
+            return_type: String(routineRecord.data_type ?? ''),
+            definition_preview: definitionPreview
+          },
+          parameters
+        };
+      }
+    });
 
     return {
       success: true,
-      data: {
-        supported: true,
-        routine: {
-          schema: String(routineRecord.routine_schema ?? routineRecord.schema ?? normalizeSchemaFilter(db, schema)),
-          name: String(routineRecord.routine_name ?? routineRecord.name ?? ''),
-          routine_type: String(routineRecord.routine_type ?? kind),
-          return_type: String(routineRecord.data_type ?? ''),
-          definition_preview: definitionPreview
-        },
-        parameters
-      },
+      data,
       error: null
     };
   } catch (error) {

@@ -59,9 +59,15 @@ MSSQL_USER=readonly_user
 MSSQL_PASSWORD=replace_me
 MSSQL_SERVER=database.example.com
 MSSQL_DATABASE=database_name
+UPSTASH_REDIS_REST_URL=https://your-upstash-instance.upstash.io
+UPSTASH_REDIS_REST_TOKEN=replace_with_upstash_token
+MCP_CACHE_L1=true
+MCP_CACHE_L1_MAX_ENTRIES=256
 MCP_UI_ORIGIN=https://your-allowed-ui.example.com
 SQLITE_ALLOWED_DIR=C:\path\to\allowed\sqlite\dir
 ```
+
+Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` to enable the shared L2 cache. `MCP_CACHE_L1=true` keeps the optional in-memory L1 cache on for warm instances.
 
 ## Centralized config behavior
 

@@ -33,6 +33,7 @@ import { searchProcedures } from '@/lib/tools/searchProcedures';
 import { searchColumns } from '@/lib/tools/searchColumns';
 import { getViewDefinition } from '@/lib/tools/getViewDefinition';
 import { runQuery } from '@/lib/tools/runQuery';
+import { getMetadataCacheMetrics } from '@/lib/cache/metadataCache';
 import type { ToolRequestWithCredentials, ToolResponse } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -45,6 +46,7 @@ const SUPPORTED_DATABASES = ['postgres', 'mssql', 'mysql', 'sqlite'] as const;
 
 let transport: WebStandardStreamableHTTPServerTransport | null = null;
 let mcpReady: Promise<void> | null = null;
+let isColdStart = true;
 
 function withCors(response: Response): Response {
   const headers = new Headers(response.headers);
@@ -54,6 +56,25 @@ function withCors(response: Response): Response {
   }
   headers.set('Access-Control-Allow-Methods', ALLOWED_METHODS);
   headers.set('Access-Control-Allow-Headers', ALLOWED_HEADERS);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
+function withCacheHeaders(response: Response, coldStart: boolean): Response {
+  const metrics = getMetadataCacheMetrics();
+  const headers = new Headers(response.headers);
+  headers.set('X-MCP-Cold-Start', String(coldStart));
+  headers.set('X-MCP-Cache-L1-Hits', String(metrics.l1Hits));
+  headers.set('X-MCP-Cache-L1-Misses', String(metrics.l1Misses));
+  headers.set('X-MCP-Cache-L2-Hits', String(metrics.l2Hits));
+  headers.set('X-MCP-Cache-L2-Misses', String(metrics.l2Misses));
+  headers.set('X-MCP-Cache-DB-Fetches', String(metrics.dbFetches));
+  headers.set('X-MCP-Cache-L1-Size', String(metrics.l1Size));
+  headers.set('X-MCP-Cache-Payload-Too-Large', String(metrics.payloadTooLarge));
+
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -702,13 +723,16 @@ function getTransport(): WebStandardStreamableHTTPServerTransport {
 }
 
 async function handleMcpRequest(request: Request): Promise<Response> {
+  const coldStartForThisRequest = isColdStart;
   const currentTransport = getTransport();
 
   if (mcpReady) {
     await mcpReady;
   }
 
-  return withCors(await currentTransport.handleRequest(request));
+  const response = withCacheHeaders(withCors(await currentTransport.handleRequest(request)), coldStartForThisRequest);
+  isColdStart = false;
+  return response;
 }
 
 async function handleLegacyRequest(request: Request): Promise<Response> {

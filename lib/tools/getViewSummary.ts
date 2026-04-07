@@ -1,4 +1,5 @@
 import { CONFIG } from '@/lib/config';
+import { METADATA_CACHE_TTLS, readThroughMetadataCache } from '@/lib/cache/metadataCache';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryMySQL } from '@/lib/db/mysql';
 import { queryPostgres } from '@/lib/db/postgres';
@@ -128,21 +129,33 @@ export async function getViewSummary(
 ): Promise<ToolResponse<{ view: string; schema: string; column_count: number; columns_preview: ColumnRow[]; has_more_columns: boolean; definition_preview: string }>> {
   try {
     const resolvedSchema = normalizeSchemaFilter(db, schema);
-    const columns = await getColumns(db, view, schema, credentials);
-    const definition = await getDefinition(db, view, schema, credentials);
-    const previewLimit = CONFIG.app.previewRows || 5;
-    const columnsPreview = columns.slice(0, previewLimit);
+    const data = await readThroughMetadataCache({
+      db,
+      tool: 'getViewSummary',
+      schema: resolvedSchema,
+      params: { view },
+      credentials,
+      ttlSeconds: METADATA_CACHE_TTLS.summary,
+      fetcher: async () => {
+        const columns = await getColumns(db, view, schema, credentials);
+        const definition = await getDefinition(db, view, schema, credentials);
+        const previewLimit = CONFIG.app.previewRows || 5;
+        const columnsPreview = columns.slice(0, previewLimit);
+
+        return {
+          view,
+          schema: resolvedSchema,
+          column_count: columns.length,
+          columns_preview: columnsPreview,
+          has_more_columns: columns.length > columnsPreview.length,
+          definition_preview: truncateText(definition, 250)
+        };
+      }
+    });
 
     return {
       success: true,
-      data: {
-        view,
-        schema: resolvedSchema,
-        column_count: columns.length,
-        columns_preview: columnsPreview,
-        has_more_columns: columns.length > columnsPreview.length,
-        definition_preview: truncateText(definition, 250)
-      },
+      data,
       error: null
     };
   } catch (error) {
