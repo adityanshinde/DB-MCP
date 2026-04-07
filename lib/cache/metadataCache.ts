@@ -108,6 +108,29 @@ function recordPayloadBytes(value: unknown, direction: 'read' | 'write'): number
   return bytes;
 }
 
+function parseEnvelope<T>(raw: unknown): CacheEnvelope<T> | null {
+  if (!raw) {
+    return null;
+  }
+
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw) as CacheEnvelope<T>;
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof raw === 'object') {
+    const envelope = raw as Partial<CacheEnvelope<T>>;
+    if (typeof envelope.expiresAt === 'number' && 'value' in envelope) {
+      return envelope as CacheEnvelope<T>;
+    }
+  }
+
+  return null;
+}
+
 function getRedisClient(): Redis | null {
   if (redisClient !== undefined) {
     return redisClient;
@@ -178,14 +201,14 @@ async function getL2<T>(key: string): Promise<T | null> {
   }
 
   try {
-    const raw = await client.get<string>(key);
+    const raw = await client.get<unknown>(key);
     if (!raw) {
       return null;
     }
 
     recordPayloadBytes(raw, 'read');
 
-    const parsed = JSON.parse(raw) as CacheEnvelope<T>;
+    const parsed = parseEnvelope<T>(raw);
     if (!parsed || typeof parsed !== 'object' || parsed.expiresAt <= Date.now()) {
       return null;
     }
