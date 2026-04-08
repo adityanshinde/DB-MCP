@@ -8,6 +8,7 @@ import {
   type GitHubRepoContext
 } from '@/lib/tools/github/githubClient';
 import { resolveGitHubRepositoryContext } from '@/lib/tools/github/repoResolver';
+import { logMcpError, logMcpEvent } from '@/lib/runtime/observability';
 import { normalizeGitHubBranch, normalizeGitHubPath } from '@/lib/validators/githubValidator';
 import type { ToolResponse } from '@/lib/types';
 
@@ -66,6 +67,8 @@ async function loadFileContent(repoContext: GitHubRepoContext, path: string, bra
 }
 
 export async function getFileContent(repo: string | undefined, path: string, branch?: string, org?: string): Promise<ToolResponse<FileContentResult>> {
+  logMcpEvent('tool.execute.start', { tool: 'github.get_file_content', repo, org });
+
   try {
     const resolvedRepo = resolveGitHubRepositoryContext({ org, repo });
     const repoContext = await getGitHubRepositoryContext(resolvedRepo.fullName, branch);
@@ -91,6 +94,7 @@ export async function getFileContent(repo: string | undefined, path: string, bra
       error: null
     };
   } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'github.get_file_content', repo, org });
     return {
       success: false,
       data: null,

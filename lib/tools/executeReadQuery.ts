@@ -3,6 +3,7 @@ import { queryMSSQL } from '@/lib/db/mssql';
 import { queryMySQL } from '@/lib/db/mysql';
 import { queryPostgres } from '@/lib/db/postgres';
 import { querySQLite } from '@/lib/db/sqlite';
+import { logMcpError, logMcpEvent } from '@/lib/runtime/observability';
 import { validateSelectOnlyQuery } from '@/lib/validators/queryValidator';
 import type { DBType, DatabaseCredentials, QueryMetadata, ToolResponse } from '@/lib/types';
 
@@ -31,12 +32,15 @@ export async function executeReadQuery(
   query: string,
   credentials?: DatabaseCredentials
 ): Promise<ToolResponse<{ metadata: QueryMetadata; rows: unknown[] }>> {
+  logMcpEvent('tool.execute.start', { tool: 'db.execute_read_query', db });
+
   try {
     const validated = validateSelectOnlyQuery(query);
     const executedQuery = applyResultLimit(db, validated);
 
     if (db === 'postgres') {
       const result = await queryPostgres(executedQuery, [], credentials?.postgres);
+      logMcpEvent('tool.execute.success', { tool: 'db.execute_read_query', db, rowCount: result.rowCount });
       return {
         success: true,
         data: {
@@ -54,6 +58,7 @@ export async function executeReadQuery(
 
     if (db === 'mssql') {
       const result = await queryMSSQL(executedQuery, {}, credentials?.mssql);
+      logMcpEvent('tool.execute.success', { tool: 'db.execute_read_query', db, rowCount: result.rowCount });
       return {
         success: true,
         data: {
@@ -71,6 +76,7 @@ export async function executeReadQuery(
 
     if (db === 'mysql') {
       const rows = (await queryMySQL(executedQuery, credentials)) as unknown[];
+      logMcpEvent('tool.execute.success', { tool: 'db.execute_read_query', db, rowCount: rows.length });
       return {
         success: true,
         data: {
@@ -88,6 +94,7 @@ export async function executeReadQuery(
 
     if (db === 'sqlite') {
       const rows = (await querySQLite(executedQuery, credentials)) as unknown[];
+      logMcpEvent('tool.execute.success', { tool: 'db.execute_read_query', db, rowCount: rows.length });
       return {
         success: true,
         data: {
@@ -109,6 +116,7 @@ export async function executeReadQuery(
       data: null
     };
   } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'db.execute_read_query', db });
     return {
       success: false,
       data: null,

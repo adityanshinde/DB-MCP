@@ -1,6 +1,7 @@
 import { GITHUB_CACHE_TTLS, readThroughGitHubCache } from '@/lib/cache/githubCache';
 import { getGitHubRepositoryContext, searchGitHubCode } from '@/lib/tools/github/githubClient';
 import { resolveGitHubRepositoryContext } from '@/lib/tools/github/repoResolver';
+import { logMcpError, logMcpEvent } from '@/lib/runtime/observability';
 import { clampGitHubLimit, sanitizeGitHubSearchQuery } from '@/lib/validators/githubValidator';
 import type { ToolResponse } from '@/lib/types';
 
@@ -13,6 +14,8 @@ export async function searchCode(
   language?: string,
   org?: string
 ): Promise<ToolResponse<SearchCodeResult>> {
+  logMcpEvent('tool.execute.start', { tool: 'github.search_code', repo, org });
+
   try {
     const sanitizedQuery = sanitizeGitHubSearchQuery(query);
     const resolvedLimit = clampGitHubLimit(limit, 1, 20, 10);
@@ -45,6 +48,7 @@ export async function searchCode(
       error: null
     };
   } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'github.search_code', repo, org });
     return {
       success: false,
       data: null,

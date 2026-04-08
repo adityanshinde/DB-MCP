@@ -46,6 +46,8 @@ import { getViewDefinition } from '@/lib/tools/getViewDefinition';
 import { runQuery } from '@/lib/tools/runQuery';
 import { getMetadataCacheMetrics } from '@/lib/cache/metadataCache';
 import { installProcessGuards } from '@/lib/runtime/processGuards';
+import { MCP_METRICS } from '@/lib/runtime/mcpMetrics';
+import { logMcpEvent, logMcpError } from '@/lib/runtime/observability';
 import type { ToolRequestWithCredentials, ToolResponse } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -59,14 +61,6 @@ const SUPPORTED_DATABASES = ['postgres', 'mssql', 'mysql', 'sqlite'] as const;
 installProcessGuards();
 
 let isColdStart = true;
-const mcpSessionMetrics = {
-  sessionsCreated: 0,
-  sessionsReused: 0,
-  transportsCreated: 0,
-  sseFailures: 0,
-  conflict409s: 0,
-  deleteRequests: 0
-};
 
 type SessionEntry = {
   sessionId: string;
@@ -86,6 +80,16 @@ type SessionResolution = {
 };
 
 const sessionEntries = new Map<string, SessionEntry>();
+
+function logRequestEvent(event: string, request: Request, extra: Record<string, unknown> = {}): void {
+  logMcpEvent(event, {
+    method: request.method,
+    path: new URL(request.url).pathname,
+    sessionId: readSessionId(request),
+    totalRequests: MCP_METRICS.request.totalRequests,
+    ...extra
+  });
+}
 
 function readSessionId(request: Request): string | null {
   return request.headers.get('Mcp-Session-Id')?.trim() || null;
@@ -113,14 +117,14 @@ function isInitializationPayload(rawBody?: string): boolean {
 }
 
 async function createSessionEntry(sessionId: string): Promise<SessionEntry> {
-  mcpSessionMetrics.sessionsCreated += 1;
+  MCP_METRICS.session.sessionsCreated += 1;
   const server = createMcpServer();
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: () => sessionId,
     enableJsonResponse: false
   });
 
-  mcpSessionMetrics.transportsCreated += 1;
+  MCP_METRICS.session.transportsCreated += 1;
 
   const entry: SessionEntry = {
     sessionId,
@@ -139,6 +143,7 @@ async function createSessionEntry(sessionId: string): Promise<SessionEntry> {
     await entry.ready;
     return entry;
   } catch (error) {
+    logMcpError('session.create_failed', error, { sessionId });
     await closeSessionEntry(sessionId);
     throw error;
   }
@@ -148,7 +153,7 @@ async function getSessionEntry(sessionId: string, allowCreate: boolean): Promise
   const existing = sessionEntries.get(sessionId);
   if (existing) {
     existing.lastUsedAt = Date.now();
-    mcpSessionMetrics.sessionsReused += 1;
+    MCP_METRICS.session.sessionsReused += 1;
     return {
       entry: existing,
       created: false,
@@ -179,7 +184,7 @@ async function resolveSessionEntry(request: Request, rawBody?: string): Promise<
     const existing = sessionEntries.get(sessionId);
     if (existing) {
       existing.lastUsedAt = Date.now();
-      mcpSessionMetrics.sessionsReused += 1;
+      MCP_METRICS.session.sessionsReused += 1;
       return {
         sessionId,
         entry: existing,
@@ -189,6 +194,13 @@ async function resolveSessionEntry(request: Request, rawBody?: string): Promise<
     }
 
     if (!initializing) {
+      MCP_METRICS.request.validationFailures += 1;
+      logMcpEvent('request.validation_failed', {
+        sessionId,
+        requestType: 'jsonrpc',
+        message: 'Unknown MCP session.',
+        validationFailures: MCP_METRICS.request.validationFailures
+      }, 'warn');
       return jsonError('Unknown MCP session.', 404);
     }
 
@@ -201,6 +213,12 @@ async function resolveSessionEntry(request: Request, rawBody?: string): Promise<
   }
 
   if (!initializing) {
+    MCP_METRICS.request.validationFailures += 1;
+    logMcpEvent('request.validation_failed', {
+      requestType: 'jsonrpc',
+      message: 'MCP session id is required.',
+      validationFailures: MCP_METRICS.request.validationFailures
+    }, 'warn');
     return jsonError('MCP session id is required.', 400);
   }
 
@@ -246,6 +264,7 @@ async function closeSessionEntry(sessionId: string): Promise<boolean> {
         await method.call(transport);
         break;
       } catch (error) {
+        logMcpError('session.transport_cleanup_failed', error, { sessionId });
         cleanupErrors.push(error);
       }
     }
@@ -257,13 +276,14 @@ async function closeSessionEntry(sessionId: string): Promise<boolean> {
         await method.call(server);
         break;
       } catch (error) {
+        logMcpError('session.server_cleanup_failed', error, { sessionId });
         cleanupErrors.push(error);
       }
     }
   }
 
   if (cleanupErrors.length > 0) {
-    console.warn('[mcp-route] session cleanup completed with errors', cleanupErrors[0]);
+    logMcpError('session.cleanup_completed_with_errors', cleanupErrors[0], { sessionId });
   }
 
   return true;
@@ -274,10 +294,10 @@ function withSessionHeaders(response: Response, sessionId: string, created: bool
   headers.set('Mcp-Session-Id', sessionId);
   headers.set('X-MCP-Session-Created', String(created));
   headers.set('X-MCP-Session-Reused', String(reused));
-  headers.set('X-MCP-Transport-Created', String(mcpSessionMetrics.transportsCreated));
-  headers.set('X-MCP-SSE-Failures', String(mcpSessionMetrics.sseFailures));
-  headers.set('X-MCP-409-Errors', String(mcpSessionMetrics.conflict409s));
-  headers.set('X-MCP-Delete-Requests', String(mcpSessionMetrics.deleteRequests));
+  headers.set('X-MCP-Transport-Created', String(MCP_METRICS.session.transportsCreated));
+  headers.set('X-MCP-SSE-Failures', String(MCP_METRICS.session.sseFailures));
+  headers.set('X-MCP-409-Errors', String(MCP_METRICS.session.conflict409s));
+  headers.set('X-MCP-Delete-Requests', String(MCP_METRICS.session.deleteRequests));
 
   return new Response(response.body, {
     status: response.status,
@@ -356,6 +376,23 @@ function withCacheHeaders(response: Response, coldStart: boolean): Response {
 }
 
 function jsonError(message: string, status: number): Response {
+  if (status >= 400 && status < 500) {
+    MCP_METRICS.request.validationFailures += 1;
+    logMcpEvent('request.validation_failed', {
+      status,
+      message,
+      validationFailures: MCP_METRICS.request.validationFailures
+    }, 'warn');
+  } else if (status >= 500) {
+    MCP_METRICS.request.errors += 1;
+    logMcpError('request.error_response', new Error(message), {
+      status,
+      errors: MCP_METRICS.request.errors
+    });
+  } else {
+    logMcpEvent('request.response', { status, message }, 'warn');
+  }
+
   return new NextResponse(
     JSON.stringify({
       success: false,
@@ -1138,6 +1175,12 @@ export function createMcpServer(): McpServer {
 }
 
 async function handleMcpRequest(request: Request, rawBody?: string): Promise<Response> {
+  MCP_METRICS.request.jsonRpcRequests += 1;
+  logRequestEvent('request.incoming', request, {
+    requestKind: 'jsonrpc',
+    jsonRpcMethod: readMcpMethod(rawBody)
+  });
+
   const coldStartForThisRequest = isColdStart;
   const sessionResolution = await resolveSessionEntry(request, rawBody);
 
@@ -1148,10 +1191,15 @@ async function handleMcpRequest(request: Request, rawBody?: string): Promise<Res
 
   try {
     await sessionResolution.entry.ready;
+    logMcpEvent('request.session_ready', {
+      sessionId: sessionResolution.sessionId,
+      created: sessionResolution.created,
+      reused: sessionResolution.reused
+    });
     const response = await handleSessionTransportRequest(sessionResolution.entry, request);
 
     if (response.status === 409) {
-      mcpSessionMetrics.conflict409s += 1;
+      MCP_METRICS.session.conflict409s += 1;
       await closeSessionEntry(sessionResolution.sessionId);
       const conflictResponse = jsonError('MCP transport conflict; session reset.', 503);
       isColdStart = false;
@@ -1172,7 +1220,12 @@ async function handleMcpRequest(request: Request, rawBody?: string): Promise<Res
     isColdStart = false;
     return wrappedResponse;
   } catch (error) {
-    mcpSessionMetrics.sseFailures += 1;
+    MCP_METRICS.session.sseFailures += 1;
+    MCP_METRICS.request.errors += 1;
+    logMcpError('request.transport_failed', error, {
+      sessionId: sessionResolution.sessionId,
+      errors: MCP_METRICS.request.errors
+    });
     const fallbackResponse = withSessionHeaders(
       withCacheHeaders(
         withCors(
@@ -1202,7 +1255,8 @@ async function handleMcpRequest(request: Request, rawBody?: string): Promise<Res
 }
 
 async function handleSessionClose(request: Request): Promise<Response> {
-  mcpSessionMetrics.deleteRequests += 1;
+  logRequestEvent('request.incoming', request, { requestKind: 'delete' });
+  MCP_METRICS.session.deleteRequests += 1;
 
   const sessionId = readSessionId(request);
   if (!sessionId) {
@@ -1224,6 +1278,9 @@ async function handleSessionClose(request: Request): Promise<Response> {
 }
 
 async function handleLegacyRequest(request: Request): Promise<Response> {
+  MCP_METRICS.request.legacyRequests += 1;
+  logRequestEvent('request.incoming', request, { requestKind: 'legacy' });
+
   try {
     const body = (await request.json()) as Partial<ToolRequestWithCredentials>;
 
@@ -1528,6 +1585,11 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         return withCors(jsonError(`Unsupported tool: ${body.tool}`, 400));
     }
   } catch (error) {
+    MCP_METRICS.request.errors += 1;
+    logMcpError('request.legacy_failed', error, {
+      requestKind: 'legacy',
+      errors: MCP_METRICS.request.errors
+    });
     return withCors(
       new NextResponse(
         JSON.stringify({
@@ -1556,24 +1618,29 @@ export async function OPTIONS() {
 
 export async function GET(request: Request) {
   try {
+    MCP_METRICS.request.totalRequests += 1;
     return await handleMcpRequest(request);
   } catch (error) {
-    console.error('[mcp-route] GET handler failed:', error);
+    MCP_METRICS.request.errors += 1;
+    logMcpError('request.get_failed', error, { errors: MCP_METRICS.request.errors });
     return withCors(jsonError(error instanceof Error ? error.message : 'Unexpected server error.', 500));
   }
 }
 
 export async function DELETE(request: Request) {
   try {
+    MCP_METRICS.request.totalRequests += 1;
     return await handleSessionClose(request);
   } catch (error) {
-    console.error('[mcp-route] DELETE handler failed:', error);
+    MCP_METRICS.request.errors += 1;
+    logMcpError('request.delete_failed', error, { errors: MCP_METRICS.request.errors });
     return withCors(jsonError(error instanceof Error ? error.message : 'Unexpected server error.', 500));
   }
 }
 
 export async function POST(request: Request) {
   try {
+    MCP_METRICS.request.totalRequests += 1;
     const rawBody = await request.clone().text();
     if (isMcpJsonRpcBody(rawBody)) {
       return await handleMcpRequest(request, rawBody);
@@ -1581,7 +1648,8 @@ export async function POST(request: Request) {
 
     return await handleLegacyRequest(request);
   } catch (error) {
-    console.error('[mcp-route] POST handler failed:', error);
+    MCP_METRICS.request.errors += 1;
+    logMcpError('request.post_failed', error, { errors: MCP_METRICS.request.errors });
     return withCors(jsonError(error instanceof Error ? error.message : 'Unexpected server error.', 500));
   }
 }

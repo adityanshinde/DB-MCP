@@ -1,10 +1,11 @@
+import { logMcpError } from '@/lib/runtime/observability';
+
 const globalProcessState = globalThis as typeof globalThis & {
   __mcpProcessGuardsInstalled?: boolean;
 };
 
 function logFatalEvent(label: string, error: unknown): void {
-  const message = error instanceof Error ? error.stack || error.message : String(error);
-  console.error(`[mcp] ${label}:`, message);
+  logMcpError(`process.${label}`, error);
 }
 
 export function installProcessGuards(): void {

@@ -38,6 +38,7 @@ import { searchProcedures } from '../tools/searchProcedures';
 import { searchColumns } from '../tools/searchColumns';
 import { getViewDefinition } from '../tools/getViewDefinition';
 import { runQuery } from '../tools/runQuery';
+import { logMcpError } from '../runtime/observability';
 import type { ToolResponse } from '../types';
 
 type CallToolResult = {
@@ -49,6 +50,10 @@ type CallToolResult = {
 const SUPPORTED_DATABASES = ['postgres', 'mssql', 'mysql', 'sqlite'] as const;
 
 function toTextResult(result: ToolResponse<unknown>): CallToolResult {
+  if (!result.success) {
+    logMcpError('tool.execute.failed', new Error(result.error ?? 'Tool execution failed.'));
+  }
+
   if (result.success) {
     return {
       content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],

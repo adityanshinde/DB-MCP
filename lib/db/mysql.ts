@@ -7,7 +7,7 @@ let defaultPool: mysql.Pool | null = null;
 
 function logMySqlEvent(message: string, error?: unknown): void {
   if (error) {
-    console.warn(`[mysql] ${message}`, error);
+    console.error(`[mysql] ${message}`, error);
     return;
   }
 

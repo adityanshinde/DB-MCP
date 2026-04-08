@@ -10,6 +10,7 @@ import {
   type GitHubRepoContext
 } from '@/lib/tools/github/githubClient';
 import { resolveGitHubRepositoryContext } from '@/lib/tools/github/repoResolver';
+import { logMcpError, logMcpEvent } from '@/lib/runtime/observability';
 import { normalizeGitHubBranch, normalizeGitHubPath } from '@/lib/validators/githubValidator';
 import type { ToolResponse } from '@/lib/types';
 
@@ -157,6 +158,8 @@ async function loadModuleSummary(repoContext: GitHubRepoContext, path: string, b
 }
 
 export async function moduleSummary(input: GitHubModuleSummaryInput): Promise<ToolResponse<GitHubModuleSummaryOutput>> {
+  logMcpEvent('tool.execute.start', { tool: 'github.module_summary', repo: input.repo, org: input.org });
+
   try {
     const resolvedRepo = resolveGitHubRepositoryContext({ org: input.org, repo: input.repo });
     const repoContext = await getGitHubRepositoryContext(resolvedRepo.fullName, input.branch);
@@ -189,6 +192,7 @@ export async function moduleSummary(input: GitHubModuleSummaryInput): Promise<To
       error: null
     };
   } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'github.module_summary', repo: input.repo, org: input.org });
     return {
       success: false,
       data: null,

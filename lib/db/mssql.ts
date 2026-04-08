@@ -7,7 +7,7 @@ let poolPromise: Promise<sql.ConnectionPool> | null = null;
 
 function logMssqlEvent(message: string, error?: unknown): void {
   if (error) {
-    console.warn(`[mssql] ${message}`, error);
+    console.error(`[mssql] ${message}`, error);
     return;
   }
 

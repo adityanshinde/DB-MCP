@@ -8,7 +8,7 @@ let defaultDb: sqlite3.Database | null = null;
 
 function logSqliteEvent(message: string, error?: unknown): void {
   if (error) {
-    console.warn(`[sqlite] ${message}`, error);
+    console.error(`[sqlite] ${message}`, error);
     return;
   }
 

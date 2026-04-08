@@ -2,6 +2,7 @@ import { CONFIG } from '@/lib/config';
 import { GITHUB_CACHE_TTLS, readThroughGitHubCache } from '@/lib/cache/githubCache';
 import { getGitHubContent, getGitHubRepositoryContext } from '@/lib/tools/github/githubClient';
 import { resolveGitHubRepositoryContext } from '@/lib/tools/github/repoResolver';
+import { logMcpError, logMcpEvent } from '@/lib/runtime/observability';
 import { clampGitHubLimit, normalizeGitHubBranch, normalizeGitHubPath } from '@/lib/validators/githubValidator';
 import type { ToolResponse } from '@/lib/types';
 
@@ -121,6 +122,8 @@ export async function getRepoTree(
   depth = 3,
   org?: string
 ): Promise<ToolResponse<RepoTreeResult>> {
+  logMcpEvent('tool.execute.start', { tool: 'github.get_repo_tree', repo, org });
+
   try {
     const resolvedDepth = clampGitHubLimit(depth, 1, CONFIG.github.treeMaxDepth, 3);
     const resolvedRepo = resolveGitHubRepositoryContext({ org, repo });
@@ -147,6 +150,7 @@ export async function getRepoTree(
       error: null
     };
   } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'github.get_repo_tree', repo, org });
     return {
       success: false,
       data: null,

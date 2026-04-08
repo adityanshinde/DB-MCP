@@ -1,5 +1,6 @@
 import { CONFIG } from '@/lib/config';
 import { GITHUB_CACHE_TTLS, readThroughGitHubCache } from '@/lib/cache/githubCache';
+import { logMcpError } from '@/lib/runtime/observability';
 import {
   ensureAllowedGitHubRepository,
   normalizeGitHubBranch,
@@ -247,6 +248,7 @@ export async function getGitHubRepositoryContext(repository: string, branch?: st
     allowedRepository = ensureAllowedGitHubRepository(repository);
   } catch (error) {
     markGitHubAllowlistReject();
+    logMcpError('github.allowlist_reject', error, { repository });
     throw error;
   }
 

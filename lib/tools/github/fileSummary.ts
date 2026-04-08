@@ -9,6 +9,7 @@ import {
   type GitHubRepoContext
 } from '@/lib/tools/github/githubClient';
 import { resolveGitHubRepositoryContext } from '@/lib/tools/github/repoResolver';
+import { logMcpError, logMcpEvent } from '@/lib/runtime/observability';
 import { normalizeGitHubBranch, normalizeGitHubPath } from '@/lib/validators/githubValidator';
 import type { ToolResponse } from '@/lib/types';
 
@@ -109,7 +110,8 @@ function findKeySections(lines: string[], contextLines: number, focusPattern?: s
           });
         }
       });
-    } catch {
+    } catch (error) {
+      logMcpError('tool.execution_warning', error, { tool: 'github.file_summary', focusPattern });
       // Invalid regex falls back to generic section detection.
     }
   }
@@ -204,6 +206,8 @@ async function loadFileSummary(repoContext: GitHubRepoContext, path: string, bra
 }
 
 export async function fileSummary(input: GitHubFileSummaryInput): Promise<ToolResponse<GitHubFileSummaryOutput>> {
+  logMcpEvent('tool.execute.start', { tool: 'github.file_summary', repo: input.repo, org: input.org });
+
   try {
     const resolvedRepo = resolveGitHubRepositoryContext({ org: input.org, repo: input.repo });
     const repoContext = await getGitHubRepositoryContext(resolvedRepo.fullName, input.branch);
@@ -235,6 +239,7 @@ export async function fileSummary(input: GitHubFileSummaryInput): Promise<ToolRe
       error: null
     };
   } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'github.file_summary', repo: input.repo, org: input.org });
     return {
       success: false,
       data: null,

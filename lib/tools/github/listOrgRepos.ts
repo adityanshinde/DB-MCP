@@ -6,6 +6,7 @@ import {
   recordGitHubOrgRepoListFilteredOut
 } from '@/lib/tools/github/githubClient';
 import { getAllowedReposForOrgName, resolveGitHubOrgForListing } from '@/lib/tools/github/repoResolver';
+import { logMcpError, logMcpEvent } from '@/lib/runtime/observability';
 import type { ToolResponse } from '@/lib/types';
 
 type GitHubRepositorySummary = {
@@ -103,6 +104,8 @@ async function loadOrgRepos(input: Required<Pick<GitHubListOrgReposInput, 'org' 
 }
 
 export async function listOrgRepos(input: GitHubListOrgReposInput): Promise<ToolResponse<GitHubListOrgReposOutput>> {
+  logMcpEvent('tool.execute.start', { tool: 'github.list_org_repos', org: input.org });
+
   try {
     const org = resolveGitHubOrgForListing(input.org);
     const page = clampPage(input.page, 1);
@@ -138,6 +141,7 @@ export async function listOrgRepos(input: GitHubListOrgReposInput): Promise<Tool
       error: null
     };
   } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'github.list_org_repos', org: input.org });
     return {
       success: false,
       data: null,

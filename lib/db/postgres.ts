@@ -7,7 +7,7 @@ let pool: Pool | null = null;
 
 function logPostgresEvent(message: string, error?: unknown): void {
   if (error) {
-    console.warn(`[postgres] ${message}`, error);
+    console.error(`[postgres] ${message}`, error);
     return;
   }
 
