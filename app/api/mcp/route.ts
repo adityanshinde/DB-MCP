@@ -1182,72 +1182,42 @@ async function handleMcpRequest(request: Request, rawBody?: string): Promise<Res
   });
 
   const coldStartForThisRequest = isColdStart;
-  const sessionResolution = await resolveSessionEntry(request, rawBody);
-
-  if (sessionResolution instanceof Response) {
-    isColdStart = false;
-    return withCacheHeaders(withCors(sessionResolution), coldStartForThisRequest);
-  }
 
   try {
-    await sessionResolution.entry.ready;
-    logMcpEvent('request.session_ready', {
-      sessionId: sessionResolution.sessionId,
-      created: sessionResolution.created,
-      reused: sessionResolution.reused
+    const server = createMcpServer();
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true
     });
-    const response = await handleSessionTransportRequest(sessionResolution.entry, request);
 
-    if (response.status === 409) {
-      MCP_METRICS.session.conflict409s += 1;
-      await closeSessionEntry(sessionResolution.sessionId);
-      const conflictResponse = jsonError('MCP transport conflict; session reset.', 503);
-      isColdStart = false;
-      return withSessionHeaders(
-        withCacheHeaders(withCors(conflictResponse), coldStartForThisRequest),
-        sessionResolution.sessionId,
-        sessionResolution.created,
-        sessionResolution.reused
-      );
-    }
+    await server.connect(transport);
+    const response = await transport.handleRequest(request);
 
-    const wrappedResponse = withSessionHeaders(
-      withCacheHeaders(withCors(response), coldStartForThisRequest),
-      sessionResolution.sessionId,
-      sessionResolution.created,
-      sessionResolution.reused
-    );
     isColdStart = false;
-    return wrappedResponse;
+    return withCacheHeaders(withCors(response), coldStartForThisRequest);
   } catch (error) {
-    MCP_METRICS.session.sseFailures += 1;
     MCP_METRICS.request.errors += 1;
     logMcpError('request.transport_failed', error, {
-      sessionId: sessionResolution.sessionId,
       errors: MCP_METRICS.request.errors
     });
-    const fallbackResponse = withSessionHeaders(
-      withCacheHeaders(
-        withCors(
-          new NextResponse(
-            JSON.stringify({
-              success: false,
-              data: null,
-              error: error instanceof Error ? error.message : 'Unexpected transport error.'
-            } satisfies ToolResponse),
-            {
-              status: 500,
-              headers: {
-                'Content-Type': 'application/json'
-              }
+
+    const fallbackResponse = withCacheHeaders(
+      withCors(
+        new NextResponse(
+          JSON.stringify({
+            success: false,
+            data: null,
+            error: error instanceof Error ? error.message : 'Unexpected transport error.'
+          } satisfies ToolResponse),
+          {
+            status: 500,
+            headers: {
+              'Content-Type': 'application/json'
             }
-          )
-        ),
-        coldStartForThisRequest
+          }
+        )
       ),
-      sessionResolution.sessionId,
-      sessionResolution.created,
-      sessionResolution.reused
+      coldStartForThisRequest
     );
     isColdStart = false;
     return fallbackResponse;
@@ -1256,24 +1226,10 @@ async function handleMcpRequest(request: Request, rawBody?: string): Promise<Res
 
 async function handleSessionClose(request: Request): Promise<Response> {
   logRequestEvent('request.incoming', request, { requestKind: 'delete' });
-  MCP_METRICS.session.deleteRequests += 1;
-
-  const sessionId = readSessionId(request);
-  if (!sessionId) {
-    return withCors(jsonError('MCP session id is required for DELETE.', 400));
-  }
-
-  await closeSessionEntry(sessionId);
-
-  return withSessionHeaders(
-    withCors(
-      new NextResponse(null, {
-        status: 200
-      })
-    ),
-    sessionId,
-    false,
-    false
+  return withCors(
+    new NextResponse(null, {
+      status: 204
+    })
   );
 }
 

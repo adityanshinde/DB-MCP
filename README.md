@@ -6,6 +6,7 @@ It is built with Next.js App Router, TypeScript, and a Node.js runtime so it can
 ## What this project does
 
 The server exposes a Claude-compatible remote MCP endpoint at `/api/mcp`.
+The MCP transport is stateless so it works correctly on Vercel-style serverless deployments without in-memory session affinity.
 Claude or any MCP client can use it to:
 
 - list tables
