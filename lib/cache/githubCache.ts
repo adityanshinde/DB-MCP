@@ -22,7 +22,11 @@ export const GITHUB_CACHE_TTLS = {
   tree: 3 * 60 * 60,
   fileContent: 10 * 60,
   search: 10 * 60,
-  summary: 30 * 60
+  summary: 30 * 60,
+  commitHistory: 5 * 60,
+  fileHistory: 5 * 60,
+  compare: 5 * 60,
+  pullRequestComments: 10 * 60
 } as const;
 
 function buildCacheKey(options: Pick<GitHubCacheOptions<unknown>, 'org' | 'repo' | 'branch' | 'tool' | 'path' | 'params'>): string {

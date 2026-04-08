@@ -11,6 +11,10 @@ export type ToolName =
   | 'github.search_code'
   | 'github.file_summary'
   | 'github.module_summary'
+  | 'github.get_commit_history'
+  | 'github.get_file_history'
+  | 'github.compare_refs'
+  | 'github.get_pull_request_comments'
   | 'list_tables'
   | 'search_tables'
   | 'search_columns'
@@ -93,6 +97,39 @@ export type GitHubModuleSummaryInput = {
   branch?: string;
   max_files?: number;
   extensions?: string[];
+};
+
+export type GitHubCommitHistoryInput = {
+  org?: string;
+  repo: string;
+  branch?: string;
+  path?: string;
+  author?: string;
+  page?: number;
+  per_page?: number;
+};
+
+export type GitHubFileHistoryInput = {
+  org?: string;
+  repo: string;
+  path: string;
+  branch?: string;
+  page?: number;
+  per_page?: number;
+};
+
+export type GitHubCompareRefsInput = {
+  org?: string;
+  repo: string;
+  base: string;
+  head: string;
+  max_files?: number;
+};
+
+export type GitHubPullRequestCommentsInput = {
+  org?: string;
+  repo: string;
+  pull_number: number;
 };
 
 export type ListTablesInput = {
@@ -311,6 +348,10 @@ export type ToolInputMap = {
   'github.search_code': GitHubSearchCodeInput;
   'github.file_summary': GitHubFileSummaryInput;
   'github.module_summary': GitHubModuleSummaryInput;
+  'github.get_commit_history': GitHubCommitHistoryInput;
+  'github.get_file_history': GitHubFileHistoryInput;
+  'github.compare_refs': GitHubCompareRefsInput;
+  'github.get_pull_request_comments': GitHubPullRequestCommentsInput;
   list_tables: ListTablesInput;
   search_tables: SearchTablesInput;
   search_columns: SearchColumnsInput;

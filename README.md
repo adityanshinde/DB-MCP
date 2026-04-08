@@ -187,8 +187,14 @@ Claude will see these tools through the MCP protocol:
 - `get_indexes`
 - `get_constraints`
 - `list_stored_procedures`
+- `github.get_commit_history`
+- `github.get_file_history`
+- `github.compare_refs`
+- `github.get_pull_request_comments`
 
 The endpoint also keeps the previous custom JSON body format for backwards compatibility.
+
+True line-by-line blame is still not available from the current serverless deployment model. For that, you would need either a self-hosted server with a checked-out git repository or a GitHub GraphQL-based implementation that exposes blame data.
 
 ## Legacy API contract
 

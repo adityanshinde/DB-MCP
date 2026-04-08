@@ -31,6 +31,10 @@ import { getFileContent } from '@/lib/tools/github/getFileContent';
 import { searchCode } from '@/lib/tools/github/searchCode';
 import { fileSummary } from '@/lib/tools/github/fileSummary';
 import { moduleSummary } from '@/lib/tools/github/moduleSummary';
+import { getCommitHistory } from '@/lib/tools/github/getCommitHistory';
+import { getFileHistory } from '@/lib/tools/github/getFileHistory';
+import { compareRefs } from '@/lib/tools/github/compareRefs';
+import { getPullRequestComments } from '@/lib/tools/github/getPullRequestComments';
 import { getGitHubMetrics } from '@/lib/tools/github/githubClient';
 import { getViewSummary } from '@/lib/tools/getViewSummary';
 import { listSchemas } from '@/lib/tools/listSchemas';
@@ -597,6 +601,97 @@ export function createMcpServer(): McpServer {
     },
     async ({ org, repo, path, branch, max_files, extensions }) =>
       toTextResult(await moduleSummary({ org, repo, path, branch, max_files, extensions }))
+  );
+
+  server.registerTool(
+    'github.get_commit_history',
+    {
+      title: 'GitHub Commit History',
+      description: 'List recent commits for a repository, optionally filtered by branch, path, or author.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().min(1),
+        branch: z.string().optional(),
+        path: z.string().optional(),
+        author: z.string().optional(),
+        page: z.number().int().min(1).max(100).default(1),
+        per_page: z.number().int().min(1).max(100).default(10)
+      })
+    },
+    async ({ org, repo, branch, path, author, page, per_page }) =>
+      toTextResult(await getCommitHistory(repo, branch, path, author, page, per_page, org))
+  );
+
+  server.registerTool(
+    'github.get_file_history',
+    {
+      title: 'GitHub File History',
+      description: 'List commit history for a single file to show who changed it over time.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().min(1),
+        path: z.string().min(1),
+        branch: z.string().optional(),
+        page: z.number().int().min(1).max(100).default(1),
+        per_page: z.number().int().min(1).max(100).default(10)
+      })
+    },
+    async ({ org, repo, path, branch, page, per_page }) =>
+      toTextResult(await getFileHistory(repo, path, branch, page, per_page, org))
+  );
+
+  server.registerTool(
+    'github.compare_refs',
+    {
+      title: 'GitHub Compare Refs',
+      description: 'Compare two branches, tags, or commits and return a compact diff summary.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().min(1),
+        base: z.string().min(1),
+        head: z.string().min(1),
+        max_files: z.number().int().min(1).max(50).default(20)
+      })
+    },
+    async ({ org, repo, base, head, max_files }) => toTextResult(await compareRefs(repo, base, head, max_files, undefined, org))
+  );
+
+  server.registerTool(
+    'github.get_pull_request_comments',
+    {
+      title: 'GitHub Pull Request Comments',
+      description: 'Return issue comments, review comments, and review submissions for a pull request.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().min(1),
+        pull_number: z.number().int().min(1)
+      })
+    },
+    async ({ org, repo, pull_number }) => toTextResult(await getPullRequestComments(repo, pull_number, org))
   );
 
   server.registerTool(
