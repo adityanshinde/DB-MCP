@@ -55,10 +55,17 @@ All runtime settings are controlled from one place only: `.env` and `lib/config.
 
 ```env
 POSTGRES_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
-MSSQL_USER=readonly_user
-MSSQL_PASSWORD=replace_me
-MSSQL_SERVER=database.example.com
-MSSQL_DATABASE=database_name
+MSSQL_CONNECTION_STRING=Data Source=13.235.202.125;Initial Catalog=REPORT_DB_FROMKG;User ID=sa;Password=your_password;Encrypt=false;TrustServerCertificate=true
+GITHUB_PAT=replace_with_github_pat
+GITHUB_ORG_NAME=myorg
+GITHUB_ALLOWED_ORGS=myorg
+GITHUB_ALLOWED_REPOS=owner1/repo1,owner2/repo2
+GITHUB_MAX_FILE_SIZE_BYTES=300000
+GITHUB_TREE_MAX_DEPTH=3
+GITHUB_ORG_REPO_PAGE_SIZE=30
+GITHUB_REPO_RESOLUTION_MAX_SCANS=3
+GITHUB_SUMMARY_CONTEXT_LINES=3
+GITHUB_SUMMARY_PREVIEW_BYTES=2000
 UPSTASH_REDIS_REST_URL=https://your-upstash-instance.upstash.io
 UPSTASH_REDIS_REST_TOKEN=replace_with_upstash_token
 MCP_CACHE_L1=true
@@ -69,13 +76,15 @@ SQLITE_ALLOWED_DIR=C:\path\to\allowed\sqlite\dir
 
 Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` to enable the shared L2 cache. `MCP_CACHE_L1=true` keeps the optional in-memory L1 cache on for warm instances.
 
+Set `GITHUB_PAT`, `GITHUB_ORG_NAME`, and `GITHUB_ALLOWED_REPOS` to enable the read-only GitHub tools. The allowlist is required and only `owner/repo` pairs in that list can be accessed. `GITHUB_ALLOWED_ORGS` lets you restrict org-level listing. `GITHUB_MAX_FILE_SIZE_BYTES` keeps file fetches bounded, `GITHUB_TREE_MAX_DEPTH` limits repository tree traversal, `GITHUB_ORG_REPO_PAGE_SIZE` bounds org listing pages, and `GITHUB_SUMMARY_CONTEXT_LINES` / `GITHUB_SUMMARY_PREVIEW_BYTES` keep summaries compact.
+
 ## Centralized config behavior
 
 The file `lib/config.ts` contains all application settings used by the server.
 It defines:
 
 - PostgreSQL connection string
-- MSSQL connection settings
+- MSSQL connection string
 - max row limit for query execution
 - allowed schemas
 

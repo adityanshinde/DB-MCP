@@ -25,3 +25,13 @@ export function validateReadOnlyQuery(query: string): string {
 
   return normalized;
 }
+
+export function validateSelectOnlyQuery(query: string): string {
+  const normalized = validateReadOnlyQuery(query);
+
+  if (!/^select\b/i.test(normalized)) {
+    throw new Error('Only SELECT queries are allowed.');
+  }
+
+  return normalized;
+}

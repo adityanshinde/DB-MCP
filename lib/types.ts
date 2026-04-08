@@ -4,6 +4,13 @@ export type ToolName =
   | 'list_schemas'
   | 'get_database_info'
   | 'run_query'
+  | 'db.execute_read_query'
+  | 'github.list_org_repos'
+  | 'github.get_repo_tree'
+  | 'github.get_file_content'
+  | 'github.search_code'
+  | 'github.file_summary'
+  | 'github.module_summary'
   | 'list_tables'
   | 'search_tables'
   | 'search_columns'
@@ -34,6 +41,58 @@ export type ToolName =
 export type RunQueryInput = {
   db: DBType;
   query: string;
+};
+
+export type ExecuteReadQueryInput = RunQueryInput;
+
+export type GitHubListOrgReposInput = {
+  org?: string;
+  page?: number;
+  per_page?: number;
+  filter?: 'all' | 'public' | 'private' | 'forks' | 'sources' | 'member';
+  sort?: 'created' | 'updated' | 'pushed' | 'full_name';
+  direction?: 'asc' | 'desc';
+};
+
+export type GitHubRepoTreeInput = {
+  org?: string;
+  repo: string;
+  path?: string;
+  branch?: string;
+  depth?: number;
+};
+
+export type GitHubFileContentInput = {
+  org?: string;
+  repo: string;
+  path: string;
+  branch?: string;
+};
+
+export type GitHubSearchCodeInput = {
+  org?: string;
+  repo: string;
+  query: string;
+  limit?: number;
+  language?: string;
+};
+
+export type GitHubFileSummaryInput = {
+  org?: string;
+  repo: string;
+  path: string;
+  branch?: string;
+  context_lines?: number;
+  focus_pattern?: string;
+};
+
+export type GitHubModuleSummaryInput = {
+  org?: string;
+  repo: string;
+  path: string;
+  branch?: string;
+  max_files?: number;
+  extensions?: string[];
 };
 
 export type ListTablesInput = {
@@ -245,6 +304,13 @@ export type ToolInputMap = {
   list_schemas: ListSchemasInput;
   get_database_info: GetDatabaseInfoInput;
   run_query: RunQueryInput;
+  'db.execute_read_query': ExecuteReadQueryInput;
+  'github.list_org_repos': GitHubListOrgReposInput;
+  'github.get_repo_tree': GitHubRepoTreeInput;
+  'github.get_file_content': GitHubFileContentInput;
+  'github.search_code': GitHubSearchCodeInput;
+  'github.file_summary': GitHubFileSummaryInput;
+  'github.module_summary': GitHubModuleSummaryInput;
   list_tables: ListTablesInput;
   search_tables: SearchTablesInput;
   search_columns: SearchColumnsInput;

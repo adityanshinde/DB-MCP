@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 
 import { McpServer, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
+
+import { CONFIG } from '@/lib/config';
 
 import { getConstraints } from '@/lib/tools/getConstraints';
 import { compareSchema } from '@/lib/tools/compareSchema';
@@ -21,6 +24,14 @@ import { explainQuery } from '@/lib/tools/explainQuery';
 import { getTableSchema } from '@/lib/tools/getSchema';
 import { getTableSampleByColumns } from '@/lib/tools/getTableSampleByColumns';
 import { getTableSummary } from '@/lib/tools/getTableSummary';
+import { executeReadQuery } from '@/lib/tools/executeReadQuery';
+import { listOrgRepos } from '@/lib/tools/github/listOrgRepos';
+import { getRepoTree } from '@/lib/tools/github/getRepoTree';
+import { getFileContent } from '@/lib/tools/github/getFileContent';
+import { searchCode } from '@/lib/tools/github/searchCode';
+import { fileSummary } from '@/lib/tools/github/fileSummary';
+import { moduleSummary } from '@/lib/tools/github/moduleSummary';
+import { getGitHubMetrics } from '@/lib/tools/github/githubClient';
 import { getViewSummary } from '@/lib/tools/getViewSummary';
 import { listSchemas } from '@/lib/tools/listSchemas';
 import { listStoredProcedures } from '@/lib/tools/listStoredProcedures';
@@ -34,6 +45,7 @@ import { searchColumns } from '@/lib/tools/searchColumns';
 import { getViewDefinition } from '@/lib/tools/getViewDefinition';
 import { runQuery } from '@/lib/tools/runQuery';
 import { getMetadataCacheMetrics } from '@/lib/cache/metadataCache';
+import { installProcessGuards } from '@/lib/runtime/processGuards';
 import type { ToolRequestWithCredentials, ToolResponse } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -44,9 +56,235 @@ const ALLOWED_METHODS = 'POST, GET, DELETE, OPTIONS';
 const ALLOWED_HEADERS = 'Content-Type, MCP-Protocol-Version, Mcp-Session-Id';
 const SUPPORTED_DATABASES = ['postgres', 'mssql', 'mysql', 'sqlite'] as const;
 
-let transport: WebStandardStreamableHTTPServerTransport | null = null;
-let mcpReady: Promise<void> | null = null;
+installProcessGuards();
+
 let isColdStart = true;
+const mcpSessionMetrics = {
+  sessionsCreated: 0,
+  sessionsReused: 0,
+  transportsCreated: 0,
+  sseFailures: 0,
+  conflict409s: 0,
+  deleteRequests: 0
+};
+
+type SessionEntry = {
+  sessionId: string;
+  server: McpServer;
+  transport: WebStandardStreamableHTTPServerTransport;
+  ready: Promise<void>;
+  queue: Promise<void>;
+  createdAt: number;
+  lastUsedAt: number;
+};
+
+type SessionResolution = {
+  sessionId: string;
+  entry: SessionEntry;
+  created: boolean;
+  reused: boolean;
+};
+
+const sessionEntries = new Map<string, SessionEntry>();
+
+function readSessionId(request: Request): string | null {
+  return request.headers.get('Mcp-Session-Id')?.trim() || null;
+}
+
+function readMcpMethod(rawBody?: string): string | null {
+  if (!rawBody) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawBody) as { jsonrpc?: string; method?: string } | null;
+    if (parsed && typeof parsed === 'object' && parsed.jsonrpc === '2.0' && typeof parsed.method === 'string') {
+      return parsed.method;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function isInitializationPayload(rawBody?: string): boolean {
+  return readMcpMethod(rawBody) === 'initialize';
+}
+
+async function createSessionEntry(sessionId: string): Promise<SessionEntry> {
+  mcpSessionMetrics.sessionsCreated += 1;
+  const server = createMcpServer();
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: () => sessionId,
+    enableJsonResponse: false
+  });
+
+  mcpSessionMetrics.transportsCreated += 1;
+
+  const entry: SessionEntry = {
+    sessionId,
+    server,
+    transport,
+    ready: Promise.resolve(),
+    queue: Promise.resolve(),
+    createdAt: Date.now(),
+    lastUsedAt: Date.now()
+  };
+
+  sessionEntries.set(sessionId, entry);
+
+  try {
+    entry.ready = server.connect(transport);
+    await entry.ready;
+    return entry;
+  } catch (error) {
+    await closeSessionEntry(sessionId);
+    throw error;
+  }
+}
+
+async function getSessionEntry(sessionId: string, allowCreate: boolean): Promise<{ entry: SessionEntry | null; created: boolean; reused: boolean }> {
+  const existing = sessionEntries.get(sessionId);
+  if (existing) {
+    existing.lastUsedAt = Date.now();
+    mcpSessionMetrics.sessionsReused += 1;
+    return {
+      entry: existing,
+      created: false,
+      reused: true
+    };
+  }
+
+  if (!allowCreate) {
+    return {
+      entry: null,
+      created: false,
+      reused: false
+    };
+  }
+
+  return {
+    entry: await createSessionEntry(sessionId),
+    created: true,
+    reused: false
+  };
+}
+
+async function resolveSessionEntry(request: Request, rawBody?: string): Promise<SessionResolution | Response> {
+  const sessionId = readSessionId(request);
+  const initializing = isInitializationPayload(rawBody);
+
+  if (sessionId) {
+    const existing = sessionEntries.get(sessionId);
+    if (existing) {
+      existing.lastUsedAt = Date.now();
+      mcpSessionMetrics.sessionsReused += 1;
+      return {
+        sessionId,
+        entry: existing,
+        created: false,
+        reused: true
+      };
+    }
+
+    if (!initializing) {
+      return jsonError('Unknown MCP session.', 404);
+    }
+
+    return {
+      sessionId,
+      entry: await createSessionEntry(sessionId),
+      created: true,
+      reused: false
+    };
+  }
+
+  if (!initializing) {
+    return jsonError('MCP session id is required.', 400);
+  }
+
+  const generatedSessionId = randomUUID();
+  return {
+    sessionId: generatedSessionId,
+    entry: await createSessionEntry(generatedSessionId),
+    created: true,
+    reused: false
+  };
+}
+
+async function handleSessionTransportRequest(entry: SessionEntry, request: Request): Promise<Response> {
+  const responsePromise = entry.queue.then(() => entry.transport.handleRequest(request));
+  entry.queue = responsePromise.then(() => undefined, () => undefined);
+  return responsePromise;
+}
+
+async function closeSessionEntry(sessionId: string): Promise<boolean> {
+  const entry = sessionEntries.get(sessionId);
+  if (!entry) {
+    return false;
+  }
+
+  sessionEntries.delete(sessionId);
+
+  const transport = entry.transport as unknown as {
+    close?: () => void | Promise<void>;
+    destroy?: () => void | Promise<void>;
+    abort?: () => void | Promise<void>;
+    dispose?: () => void | Promise<void>;
+  };
+  const server = entry.server as unknown as {
+    close?: () => void | Promise<void>;
+    dispose?: () => void | Promise<void>;
+  };
+
+  const cleanupErrors: unknown[] = [];
+
+  for (const method of [transport.close, transport.dispose, transport.abort, transport.destroy]) {
+    if (typeof method === 'function') {
+      try {
+        await method.call(transport);
+        break;
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+    }
+  }
+
+  for (const method of [server.close, server.dispose]) {
+    if (typeof method === 'function') {
+      try {
+        await method.call(server);
+        break;
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+    }
+  }
+
+  if (cleanupErrors.length > 0) {
+    console.warn('[mcp-route] session cleanup completed with errors', cleanupErrors[0]);
+  }
+
+  return true;
+}
+
+function withSessionHeaders(response: Response, sessionId: string, created: boolean, reused: boolean): Response {
+  const headers = new Headers(response.headers);
+  headers.set('Mcp-Session-Id', sessionId);
+  headers.set('X-MCP-Session-Created', String(created));
+  headers.set('X-MCP-Session-Reused', String(reused));
+  headers.set('X-MCP-Transport-Created', String(mcpSessionMetrics.transportsCreated));
+  headers.set('X-MCP-SSE-Failures', String(mcpSessionMetrics.sseFailures));
+  headers.set('X-MCP-409-Errors', String(mcpSessionMetrics.conflict409s));
+  headers.set('X-MCP-Delete-Requests', String(mcpSessionMetrics.deleteRequests));
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
 
 function withCors(response: Response): Response {
   const headers = new Headers(response.headers);
@@ -65,6 +303,7 @@ function withCors(response: Response): Response {
 
 function withCacheHeaders(response: Response, coldStart: boolean): Response {
   const metrics = getMetadataCacheMetrics();
+  const githubMetrics = getGitHubMetrics();
   const headers = new Headers(response.headers);
   headers.set('X-MCP-Cold-Start', String(coldStart));
   headers.set('X-MCP-Cache-L1-Hits', String(metrics.l1Hits));
@@ -74,6 +313,40 @@ function withCacheHeaders(response: Response, coldStart: boolean): Response {
   headers.set('X-MCP-Cache-DB-Fetches', String(metrics.dbFetches));
   headers.set('X-MCP-Cache-L1-Size', String(metrics.l1Size));
   headers.set('X-MCP-Cache-Payload-Too-Large', String(metrics.payloadTooLarge));
+  headers.set('X-MCP-GitHub-API-Calls', String(githubMetrics.apiCalls));
+  headers.set('X-MCP-GitHub-API-Errors', String(githubMetrics.apiErrors));
+  headers.set('X-MCP-GitHub-Rate-Limit-Hits', String(githubMetrics.rateLimitHits));
+  headers.set('X-MCP-GitHub-Allowlist-Rejects', String(githubMetrics.allowlistRejects));
+  headers.set('X-MCP-GitHub-Oversized-Files', String(githubMetrics.oversizedFiles));
+  headers.set('X-MCP-GitHub-Payload-Bytes-Read', String(githubMetrics.payloadBytesRead));
+  headers.set('X-MCP-GitHub-Summary-Cache-Hits', String(githubMetrics.summaryCacheHits));
+  headers.set('X-MCP-GitHub-Summary-Cache-Misses', String(githubMetrics.summaryCacheMisses));
+  headers.set('X-MCP-GitHub-Repo-Resolution-Attempts', String(githubMetrics.repoResolutionAttempts));
+  headers.set('X-MCP-GitHub-Repo-Resolution-Successes', String(githubMetrics.repoResolutionSuccesses));
+  headers.set('X-MCP-GitHub-Repo-Resolution-Ambiguous', String(githubMetrics.repoResolutionAmbiguous));
+  headers.set('X-MCP-GitHub-Repo-Resolution-Not-Found', String(githubMetrics.repoResolutionNotFound));
+  headers.set('X-MCP-GitHub-Excessive-Repo-Scan', String(githubMetrics.excessiveRepoScanAttempts));
+  headers.set('X-MCP-GitHub-Org-Repo-List-Calls', String(githubMetrics.orgRepoListCalls));
+  headers.set('X-MCP-GitHub-Org-Repo-Filtered-Out', String(githubMetrics.orgRepoListFilteredOut));
+
+  const topOrgCalls = Object.entries(githubMetrics.apiCallsByOrg)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 5)
+    .map(([key, value]) => `${key}:${value}`)
+    .join(',');
+  const topRepoCalls = Object.entries(githubMetrics.apiCallsByRepo)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 5)
+    .map(([key, value]) => `${key}:${value}`)
+    .join(',');
+
+  if (topOrgCalls) {
+    headers.set('X-MCP-GitHub-API-Calls-By-Org', topOrgCalls);
+  }
+
+  if (topRepoCalls) {
+    headers.set('X-MCP-GitHub-API-Calls-By-Repo', topRepoCalls);
+  }
 
   return new Response(response.body, {
     status: response.status,
@@ -121,7 +394,7 @@ function toTextResult(result: ToolResponse<unknown>): CallToolResult {
   };
 }
 
-function createMcpServer(): McpServer {
+export function createMcpServer(): McpServer {
   const server = new McpServer(
     {
       name: 'db-mcp',
@@ -151,6 +424,142 @@ function createMcpServer(): McpServer {
       })
     },
     async ({ db }) => toTextResult(await listSchemas(db))
+  );
+
+  server.registerTool(
+    'github.list_org_repos',
+    {
+      title: 'GitHub List Org Repos',
+      description: 'List allowlisted repositories within a configured GitHub organization, using bounded pagination.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        page: z.number().int().min(1).max(100).default(1),
+        per_page: z.number().int().min(1).max(100).default(30),
+        filter: z.enum(['all', 'public', 'private', 'forks', 'sources', 'member']).default('all'),
+        sort: z.enum(['created', 'updated', 'pushed', 'full_name']).default('created'),
+        direction: z.enum(['asc', 'desc']).default('desc')
+      })
+    },
+    async ({ org, page, per_page, filter, sort, direction }) => toTextResult(await listOrgRepos({ org, page, per_page, filter, sort, direction }))
+  );
+
+  server.registerTool(
+    'github.get_repo_tree',
+    {
+      title: 'GitHub Get Repo Tree',
+      description: 'Explore an allowlisted GitHub repository tree with a bounded depth and result cap.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        path: z.string().optional(),
+        branch: z.string().optional(),
+        depth: z.number().int().min(1).max(CONFIG.github.treeMaxDepth).default(CONFIG.github.treeMaxDepth)
+      })
+    },
+    async ({ org, repo, path, branch, depth }) => toTextResult(await getRepoTree(repo, path, branch, depth, org))
+  );
+
+  server.registerTool(
+    'github.get_file_content',
+    {
+      title: 'GitHub Get File Content',
+      description: 'Fetch the contents of a single allowlisted repository file.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        path: z.string().min(1),
+        branch: z.string().optional()
+      })
+    },
+    async ({ org, repo, path, branch }) => toTextResult(await getFileContent(repo, path, branch, org))
+  );
+
+  server.registerTool(
+    'github.search_code',
+    {
+      title: 'GitHub Search Code',
+      description: 'Search within an allowlisted GitHub repository using read-only code search.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        query: z.string().min(1),
+        limit: z.number().int().min(1).max(20).default(10),
+        language: z.string().optional()
+      })
+    },
+    async ({ org, repo, query, limit, language }) => toTextResult(await searchCode(repo, query, limit, language, org))
+  );
+
+  server.registerTool(
+    'github.file_summary',
+    {
+      title: 'GitHub File Summary',
+      description: 'Return a compact bounded summary for a single file in an allowlisted repository.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        path: z.string().min(1),
+        branch: z.string().optional(),
+        context_lines: z.number().int().min(1).max(10).default(CONFIG.github.summaryContextLines),
+        focus_pattern: z.string().optional()
+      })
+    },
+    async ({ org, repo, path, branch, context_lines, focus_pattern }) =>
+      toTextResult(await fileSummary({ org, repo, path, branch, context_lines, focus_pattern }))
+  );
+
+  server.registerTool(
+    'github.module_summary',
+    {
+      title: 'GitHub Module Summary',
+      description: 'Return a compact bounded summary for a repository folder.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        path: z.string().min(1),
+        branch: z.string().optional(),
+        max_files: z.number().int().min(5).max(50).default(20),
+        extensions: z.array(z.string().min(1)).optional()
+      })
+    },
+    async ({ org, repo, path, branch, max_files, extensions }) =>
+      toTextResult(await moduleSummary({ org, repo, path, branch, max_files, extensions }))
   );
 
   server.registerTool(
@@ -188,6 +597,25 @@ function createMcpServer(): McpServer {
       })
     },
     async ({ db, query }) => toTextResult(await runQuery(db, query))
+  );
+
+  server.registerTool(
+    'db.execute_read_query',
+    {
+      title: 'Execute Read Query',
+      description: 'Execute a strictly validated SELECT-only query with a hard result cap.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        query: z.string().min(1)
+      })
+    },
+    async ({ db, query }) => toTextResult(await executeReadQuery(db, query))
   );
 
   server.registerTool(
@@ -709,30 +1137,90 @@ function createMcpServer(): McpServer {
   return server;
 }
 
-function getTransport(): WebStandardStreamableHTTPServerTransport {
-  if (!transport) {
-    const server = createMcpServer();
-    transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true
-    });
-    mcpReady = server.connect(transport);
+async function handleMcpRequest(request: Request, rawBody?: string): Promise<Response> {
+  const coldStartForThisRequest = isColdStart;
+  const sessionResolution = await resolveSessionEntry(request, rawBody);
+
+  if (sessionResolution instanceof Response) {
+    isColdStart = false;
+    return withCacheHeaders(withCors(sessionResolution), coldStartForThisRequest);
   }
 
-  return transport;
+  try {
+    await sessionResolution.entry.ready;
+    const response = await handleSessionTransportRequest(sessionResolution.entry, request);
+
+    if (response.status === 409) {
+      mcpSessionMetrics.conflict409s += 1;
+      await closeSessionEntry(sessionResolution.sessionId);
+      const conflictResponse = jsonError('MCP transport conflict; session reset.', 503);
+      isColdStart = false;
+      return withSessionHeaders(
+        withCacheHeaders(withCors(conflictResponse), coldStartForThisRequest),
+        sessionResolution.sessionId,
+        sessionResolution.created,
+        sessionResolution.reused
+      );
+    }
+
+    const wrappedResponse = withSessionHeaders(
+      withCacheHeaders(withCors(response), coldStartForThisRequest),
+      sessionResolution.sessionId,
+      sessionResolution.created,
+      sessionResolution.reused
+    );
+    isColdStart = false;
+    return wrappedResponse;
+  } catch (error) {
+    mcpSessionMetrics.sseFailures += 1;
+    const fallbackResponse = withSessionHeaders(
+      withCacheHeaders(
+        withCors(
+          new NextResponse(
+            JSON.stringify({
+              success: false,
+              data: null,
+              error: error instanceof Error ? error.message : 'Unexpected transport error.'
+            } satisfies ToolResponse),
+            {
+              status: 500,
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            }
+          )
+        ),
+        coldStartForThisRequest
+      ),
+      sessionResolution.sessionId,
+      sessionResolution.created,
+      sessionResolution.reused
+    );
+    isColdStart = false;
+    return fallbackResponse;
+  }
 }
 
-async function handleMcpRequest(request: Request): Promise<Response> {
-  const coldStartForThisRequest = isColdStart;
-  const currentTransport = getTransport();
+async function handleSessionClose(request: Request): Promise<Response> {
+  mcpSessionMetrics.deleteRequests += 1;
 
-  if (mcpReady) {
-    await mcpReady;
+  const sessionId = readSessionId(request);
+  if (!sessionId) {
+    return withCors(jsonError('MCP session id is required for DELETE.', 400));
   }
 
-  const response = withCacheHeaders(withCors(await currentTransport.handleRequest(request)), coldStartForThisRequest);
-  isColdStart = false;
-  return response;
+  await closeSessionEntry(sessionId);
+
+  return withSessionHeaders(
+    withCors(
+      new NextResponse(null, {
+        status: 200
+      })
+    ),
+    sessionId,
+    false,
+    false
+  );
 }
 
 async function handleLegacyRequest(request: Request): Promise<Response> {
@@ -754,6 +1242,16 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
+      case 'db.execute_read_query': {
+        const input = body.input as ToolRequestWithCredentials<'db.execute_read_query'>['input'];
+        if (!input?.db || !input?.query) {
+          return withCors(jsonError('db.execute_read_query requires db and query.', 400));
+        }
+
+        const result = await executeReadQuery(input.db, input.query, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
       case 'list_schemas': {
         const input = body.input as ToolRequestWithCredentials<'list_schemas'>['input'];
         if (!input?.db) {
@@ -761,6 +1259,69 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         }
 
         const result = await listSchemas(input.db, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github.get_repo_tree': {
+        const input = body.input as ToolRequestWithCredentials<'github.get_repo_tree'>['input'];
+        if (!input?.repo && !input?.org) {
+          return withCors(jsonError('github.get_repo_tree requires repo or org.', 400));
+        }
+
+        const result = await getRepoTree(input.repo, input.path, input.branch, input.depth, input.org);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github.get_file_content': {
+        const input = body.input as ToolRequestWithCredentials<'github.get_file_content'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.path) {
+          return withCors(jsonError('github.get_file_content requires repo or org and path.', 400));
+        }
+
+        const result = await getFileContent(input.repo, input.path, input.branch, input.org);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github.search_code': {
+        const input = body.input as ToolRequestWithCredentials<'github.search_code'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.query) {
+          return withCors(jsonError('github.search_code requires repo or org and query.', 400));
+        }
+
+        const result = await searchCode(input.repo, input.query, input.limit, input.language, input.org);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github.list_org_repos': {
+        const input = body.input as ToolRequestWithCredentials<'github.list_org_repos'>['input'];
+        const result = await listOrgRepos({
+          org: input?.org,
+          page: input?.page,
+          per_page: input?.per_page,
+          filter: input?.filter,
+          sort: input?.sort,
+          direction: input?.direction
+        });
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github.file_summary': {
+        const input = body.input as ToolRequestWithCredentials<'github.file_summary'>['input'];
+        if (!input?.path || (!input?.repo && !input?.org)) {
+          return withCors(jsonError('github.file_summary requires repo or org and path.', 400));
+        }
+
+        const result = await fileSummary(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github.module_summary': {
+        const input = body.input as ToolRequestWithCredentials<'github.module_summary'>['input'];
+        if (!input?.path || (!input?.repo && !input?.org)) {
+          return withCors(jsonError('github.module_summary requires repo or org and path.', 400));
+        }
+
+        const result = await moduleSummary(input);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
@@ -994,18 +1555,33 @@ export async function OPTIONS() {
 }
 
 export async function GET(request: Request) {
-  return handleMcpRequest(request);
+  try {
+    return await handleMcpRequest(request);
+  } catch (error) {
+    console.error('[mcp-route] GET handler failed:', error);
+    return withCors(jsonError(error instanceof Error ? error.message : 'Unexpected server error.', 500));
+  }
 }
 
 export async function DELETE(request: Request) {
-  return handleMcpRequest(request);
+  try {
+    return await handleSessionClose(request);
+  } catch (error) {
+    console.error('[mcp-route] DELETE handler failed:', error);
+    return withCors(jsonError(error instanceof Error ? error.message : 'Unexpected server error.', 500));
+  }
 }
 
 export async function POST(request: Request) {
-  const rawBody = await request.clone().text();
-  if (isMcpJsonRpcBody(rawBody)) {
-    return handleMcpRequest(request);
-  }
+  try {
+    const rawBody = await request.clone().text();
+    if (isMcpJsonRpcBody(rawBody)) {
+      return await handleMcpRequest(request, rawBody);
+    }
 
-  return handleLegacyRequest(request);
+    return await handleLegacyRequest(request);
+  } catch (error) {
+    console.error('[mcp-route] POST handler failed:', error);
+    return withCors(jsonError(error instanceof Error ? error.message : 'Unexpected server error.', 500));
+  }
 }
