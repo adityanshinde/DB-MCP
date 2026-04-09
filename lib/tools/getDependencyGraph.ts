@@ -35,7 +35,8 @@ export async function getDependencyGraph(
   table?: string,
   schema?: string,
   limit?: number,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ root?: string; node_count: number; edge_count: number; nodes: GraphNode[]; edges: GraphEdge[]; truncated: boolean }>> {
   try {
     const rowLimit = Math.max(1, Math.min(20, Number.isFinite(limit ?? NaN) ? Number(limit) : 10));
@@ -43,11 +44,12 @@ export async function getDependencyGraph(
       db,
       tool: 'getDependencyGraph',
       schema,
+      connection,
       params: { table: table ?? 'all', limit: rowLimit },
       credentials,
       ttlSeconds: METADATA_CACHE_TTLS.analytics,
       fetcher: async () => {
-        const result = await getRelationships(db, table, schema, credentials);
+        const result = await getRelationships(db, table, schema, credentials, connection);
         if (!result.success || !result.data) {
           throw new Error(result.error ?? 'Failed to build dependency graph.');
         }

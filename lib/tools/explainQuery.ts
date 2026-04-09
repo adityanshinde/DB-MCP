@@ -9,7 +9,8 @@ import { truncateText } from '@/lib/tools/toolUtils';
 export async function explainQuery(
   db: DBType,
   query: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ db: DBType; query: string; plan: string[]; plan_preview: string }>> {
   try {
     const validated = validateReadOnlyQuery(query);
@@ -18,7 +19,8 @@ export async function explainQuery(
       const result = await queryPostgres<{ 'QUERY PLAN': string }>(
         `EXPLAIN ${validated}`,
         [],
-        credentials?.postgres
+        credentials?.postgres,
+        connection
       );
 
       const plan = result.rows.map((row) => row['QUERY PLAN']).filter(Boolean);

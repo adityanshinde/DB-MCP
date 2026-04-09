@@ -9,7 +9,8 @@ export async function getRowCount(
   db: DBType,
   table: string,
   schema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ table: string; schema: string; row_count: number }>> {
   try {
     const resolvedSchema = normalizeSchemaFilter(db, schema);
@@ -19,7 +20,8 @@ export async function getRowCount(
         `SELECT COUNT(*)::bigint AS row_count
          FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}`,
         [],
-        credentials?.postgres
+        credentials?.postgres,
+        connection
       );
 
       return {

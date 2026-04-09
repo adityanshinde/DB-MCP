@@ -45,9 +45,13 @@ export type ToolName =
 export type RunQueryInput = {
   db: DBType;
   query: string;
-};
+} & PostgresConnectionInput;
 
 export type ExecuteReadQueryInput = RunQueryInput;
+
+export type PostgresConnectionInput = {
+  connection?: string;
+};
 
 export type GitHubListOrgReposInput = {
   org?: string;
@@ -134,70 +138,70 @@ export type GitHubPullRequestCommentsInput = {
 
 export type ListTablesInput = {
   db: DBType;
-};
+} & PostgresConnectionInput;
 
 export type ListSchemasInput = {
   db: DBType;
-};
+} & PostgresConnectionInput;
 
 export type GetDatabaseInfoInput = {
   db: DBType;
-};
+} & PostgresConnectionInput;
 
 export type SearchTablesInput = {
   db: DBType;
   query: string;
   schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type SearchColumnsInput = {
   db: DBType;
   query: string;
   schema?: string;
   limit?: number;
-};
+} & PostgresConnectionInput;
 
 export type GetTableSummaryInput = {
   db: DBType;
   table: string;
   schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type GetViewSummaryInput = {
   db: DBType;
   view: string;
   schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type GetViewDefinitionInput = {
   db: DBType;
   view: string;
   schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type GetProcedureSummaryInput = {
   db: DBType;
   procedure: string;
   schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type GetFunctionSummaryInput = {
   db: DBType;
   func: string;
   schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type GetSampleRowsInput = {
   db: DBType;
   table: string;
   schema?: string;
   limit?: number;
-};
+} & PostgresConnectionInput;
 
 export type ExplainQueryInput = {
   db: DBType;
   query: string;
-};
+} & PostgresConnectionInput;
 
 export type CompareSchemaInput = {
   db: DBType;
@@ -205,48 +209,48 @@ export type CompareSchemaInput = {
   right_table: string;
   left_schema?: string;
   right_schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type GetColumnStatsInput = {
   db: DBType;
   table: string;
   schema?: string;
   limit?: number;
-};
+} & PostgresConnectionInput;
 
 export type SearchViewsInput = {
   db: DBType;
   query: string;
   schema?: string;
   limit?: number;
-};
+} & PostgresConnectionInput;
 
 export type GetRowCountInput = {
   db: DBType;
   table: string;
   schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type GetForeignKeySummaryInput = {
   db: DBType;
   table?: string;
   schema?: string;
   limit?: number;
-};
+} & PostgresConnectionInput;
 
 export type SearchFunctionsInput = {
   db: DBType;
   query: string;
   schema?: string;
   limit?: number;
-};
+} & PostgresConnectionInput;
 
 export type SearchProceduresInput = {
   db: DBType;
   query: string;
   schema?: string;
   limit?: number;
-};
+} & PostgresConnectionInput;
 
 export type GetTableSampleByColumnsInput = {
   db: DBType;
@@ -254,14 +258,14 @@ export type GetTableSampleByColumnsInput = {
   schema?: string;
   columns?: string[];
   limit?: number;
-};
+} & PostgresConnectionInput;
 
 export type GetDependencyGraphInput = {
   db: DBType;
   table?: string;
   schema?: string;
   limit?: number;
-};
+} & PostgresConnectionInput;
 
 export type CompareObjectVersionsInput = {
   db: DBType;
@@ -271,7 +275,7 @@ export type CompareObjectVersionsInput = {
   schema?: string;
   left_schema?: string;
   right_schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type GetRelationPathInput = {
   db: DBType;
@@ -279,35 +283,35 @@ export type GetRelationPathInput = {
   target_table: string;
   schema?: string;
   limit?: number;
-};
+} & PostgresConnectionInput;
 
 export type GetIndexesInput = {
   db: DBType;
   table?: string;
   schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type GetConstraintsInput = {
   db: DBType;
   table?: string;
   schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type ListStoredProceduresInput = {
   db: DBType;
-};
+} & PostgresConnectionInput;
 
 export type GetTableSchemaInput = {
   db: DBType;
   table: string;
   schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type GetRelationshipsInput = {
   db: DBType;
   table?: string;
   schema?: string;
-};
+} & PostgresConnectionInput;
 
 export type DatabaseCredentials = {
   type: DBType;

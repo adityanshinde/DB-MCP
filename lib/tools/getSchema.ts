@@ -21,7 +21,8 @@ export async function getTableSchema(
   db: DBType,
   table: string,
   schema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ table: string; schema: string; columns: Array<Record<string, unknown>> }>> {
   try {
     const resolvedSchema = resolveSchema(db, schema);
@@ -41,7 +42,8 @@ export async function getTableSchema(
              WHERE table_name = $1 AND table_schema = $2
              ORDER BY ordinal_position`,
             [table, resolvedSchema],
-            credentials?.postgres
+            credentials?.postgres,
+            connection
           );
 
           return {

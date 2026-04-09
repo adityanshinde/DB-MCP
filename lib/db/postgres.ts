@@ -3,7 +3,7 @@ import { Pool, type PoolClient, type QueryConfig, type QueryResultRow } from 'pg
 import { CONFIG } from '@/lib/config';
 import type { DatabaseCredentials } from '@/lib/types';
 
-let pool: Pool | null = null;
+const pools = new Map<string, Pool>();
 
 function logPostgresEvent(message: string, error?: unknown): void {
   if (error) {
@@ -14,28 +14,50 @@ function logPostgresEvent(message: string, error?: unknown): void {
   console.info(`[postgres] ${message}`);
 }
 
-function getPool(): Pool {
-  if (!CONFIG.postgres.url) {
-    throw new Error('POSTGRES_URL is not configured.');
+function normalizeConnectionName(connection?: string): string {
+  return connection?.trim() || CONFIG.postgres.defaultConnection || 'default';
+}
+
+function getConfiguredConnectionString(connection?: string): string {
+  const connectionName = normalizeConnectionName(connection);
+  const url = CONFIG.postgres.connections[connectionName] || (connectionName === 'default' ? CONFIG.postgres.url : '');
+
+  if (!url) {
+    const availableConnections = Object.keys(CONFIG.postgres.connections);
+    throw new Error(
+      availableConnections.length > 0
+        ? `Unknown Postgres connection "${connectionName}". Available connections: ${availableConnections.join(', ')}.`
+        : 'POSTGRES_URLS or POSTGRES_URL is not configured.'
+    );
   }
 
-  if (!pool) {
-    pool = new Pool({
-      connectionString: CONFIG.postgres.url,
-      max: 10,
-      idleTimeoutMillis: 30_000,
-      allowExitOnIdle: true,
-      connectionTimeoutMillis: CONFIG.app.queryTimeoutMs
-    });
+  return url;
+}
 
-    pool.on('error', (error) => {
-      logPostgresEvent('pool error; discarding static pool', error);
-      pool = null;
-    });
+function getPool(connection?: string): Pool {
+  const connectionName = normalizeConnectionName(connection);
+  const connectionString = getConfiguredConnectionString(connectionName);
+  const existing = pools.get(connectionName);
 
-    logPostgresEvent('static pool created');
+  if (existing) {
+    return existing;
   }
 
+  const pool = new Pool({
+    connectionString,
+    max: 10,
+    idleTimeoutMillis: 30_000,
+    allowExitOnIdle: true,
+    connectionTimeoutMillis: CONFIG.app.queryTimeoutMs
+  });
+
+  pool.on('error', (error) => {
+    logPostgresEvent(`pool error; discarding static pool ${connectionName}`, error);
+    pools.delete(connectionName);
+  });
+
+  pools.set(connectionName, pool);
+  logPostgresEvent(`static pool created for ${connectionName}`);
   return pool;
 }
 
@@ -62,10 +84,11 @@ async function acquireClient(currentPool: Pool): Promise<PoolClient> {
 export async function queryPostgres<T extends QueryResultRow = QueryResultRow>(
   sql: string,
   params: unknown[] = [],
-  credentials?: DatabaseCredentials['postgres']
+  credentials?: DatabaseCredentials['postgres'],
+  connection?: string
 ) {
   const isDynamic = Boolean(credentials);
-  const currentPool = credentials ? getDynamicPool(credentials) : getPool();
+  const currentPool = credentials ? getDynamicPool(credentials) : getPool(connection);
   let client: PoolClient | null = null;
   let releaseError: Error | undefined;
 

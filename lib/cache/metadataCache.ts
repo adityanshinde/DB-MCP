@@ -7,6 +7,7 @@ type MetadataCacheOptions<T> = {
   tool: string;
   ttlSeconds: number;
   schema?: string;
+  connection?: string;
   params?: Record<string, unknown>;
   credentials?: DatabaseCredentials;
   fetcher: () => Promise<T>;
@@ -39,15 +40,16 @@ function buildParamsHash(params?: Record<string, unknown>): string {
   return buildStableHash(params ?? {});
 }
 
-function buildCacheKey(options: Pick<MetadataCacheOptions<unknown>, 'db' | 'tool' | 'schema' | 'params' | 'credentials'>): string {
+function buildCacheKey(options: Pick<MetadataCacheOptions<unknown>, 'db' | 'tool' | 'schema' | 'connection' | 'params' | 'credentials'>): string {
   const schemaPart = normalizeKeyPart(options.schema);
+  const connectionPart = normalizeKeyPart(options.connection);
   const credentialPart = fingerprintCredentials(options.credentials);
   const paramsPart = buildParamsHash(options.params);
 
-  return `metadata:${options.db}:${schemaPart}:${options.tool}:${credentialPart}:${paramsPart}`;
+  return `metadata:${options.db}:${schemaPart}:${connectionPart}:${options.tool}:${credentialPart}:${paramsPart}`;
 }
 
-export function getMetadataCacheKey(options: Pick<MetadataCacheOptions<unknown>, 'db' | 'tool' | 'schema' | 'params' | 'credentials'>): string {
+export function getMetadataCacheKey(options: Pick<MetadataCacheOptions<unknown>, 'db' | 'tool' | 'schema' | 'connection' | 'params' | 'credentials'>): string {
   return buildCacheKey(options);
 }
 

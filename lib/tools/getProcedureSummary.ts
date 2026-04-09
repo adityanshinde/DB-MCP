@@ -5,7 +5,8 @@ export async function getProcedureSummary(
   db: DBType,
   procedure: string,
   schema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ supported: boolean; routine: Record<string, unknown> | null; parameters: Array<Record<string, unknown>> }>> {
-  return getRoutineSummary(db, 'PROCEDURE', procedure, schema, credentials);
+  return getRoutineSummary(db, 'PROCEDURE', procedure, schema, credentials, connection);
 }

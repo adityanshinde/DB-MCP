@@ -23,11 +23,12 @@ export async function compareSchema(
   rightTable: string,
   leftSchema?: string,
   rightSchema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ left: { table: string; schema?: string }; right: { table: string; schema?: string }; added_columns: string[]; removed_columns: string[]; changed_columns: ComparedColumn[]; shared_columns: string[] }>> {
   try {
-    const left = await getTableSchema(db, leftTable, leftSchema, credentials);
-    const right = await getTableSchema(db, rightTable, rightSchema, credentials);
+    const left = await getTableSchema(db, leftTable, leftSchema, credentials, connection);
+    const right = await getTableSchema(db, rightTable, rightSchema, credentials, connection);
 
     if (!left.success) {
       return {

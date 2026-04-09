@@ -45,20 +45,21 @@ async function getSnapshot(
   objectType: ObjectType,
   name: string,
   schema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<Record<string, unknown> | null> {
   if (objectType === 'table') {
-    const result = await getTableSummary(db, name, schema, credentials);
+    const result = await getTableSummary(db, name, schema, credentials, connection);
     return result.success && result.data ? result.data : null;
   }
 
   if (objectType === 'view') {
-    const result = await getViewSummary(db, name, schema, credentials);
+    const result = await getViewSummary(db, name, schema, credentials, connection);
     return result.success && result.data ? result.data : null;
   }
 
   if (objectType === 'procedure') {
-    const result = await getProcedureSummary(db, name, schema, credentials);
+    const result = await getProcedureSummary(db, name, schema, credentials, connection);
     return result.success && result.data ? {
       supported: result.data.supported,
       routine: result.data.routine,
@@ -68,7 +69,7 @@ async function getSnapshot(
   }
 
   if (objectType === 'function') {
-    const result = await getFunctionSummary(db, name, schema, credentials);
+    const result = await getFunctionSummary(db, name, schema, credentials, connection);
     return result.success && result.data ? {
       supported: result.data.supported,
       routine: result.data.routine,
@@ -88,11 +89,12 @@ export async function compareObjectVersions(
   schema?: string,
   leftSchema?: string,
   rightSchema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ object_type: ObjectType; left: { name: string; schema?: string }; right: { name: string; schema?: string }; left_snapshot: Record<string, unknown> | null; right_snapshot: Record<string, unknown> | null; differences: Difference[] }>> {
   try {
-    const leftSnapshot = await getSnapshot(db, objectType, leftName, leftSchema || schema, credentials);
-    const rightSnapshot = await getSnapshot(db, objectType, rightName, rightSchema || schema, credentials);
+    const leftSnapshot = await getSnapshot(db, objectType, leftName, leftSchema || schema, credentials, connection);
+    const rightSnapshot = await getSnapshot(db, objectType, rightName, rightSchema || schema, credentials, connection);
 
     const differences = leftSnapshot && rightSnapshot ? collectDifferences(leftSnapshot, rightSnapshot) : [];
 

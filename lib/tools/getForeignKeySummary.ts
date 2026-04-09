@@ -20,7 +20,8 @@ export async function getForeignKeySummary(
   table?: string,
   schema?: string,
   limit?: number,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ total_relationships: number; local_tables: number; referenced_tables: number; preview: Array<Record<string, unknown>>; truncated: boolean }>> {
   try {
     const rowLimit = Math.max(1, Math.min(5, Number.isFinite(limit ?? NaN) ? Number(limit) : 5));
@@ -28,11 +29,12 @@ export async function getForeignKeySummary(
       db,
       tool: 'getForeignKeySummary',
       schema,
+      connection,
       params: { table: table ?? 'all', limit: rowLimit },
       credentials,
       ttlSeconds: METADATA_CACHE_TTLS.analytics,
       fetcher: async () => {
-        const result = await getRelationships(db, table, schema, credentials);
+        const result = await getRelationships(db, table, schema, credentials, connection);
 
         if (!result.success || !result.data) {
           throw new Error(result.error ?? 'Failed to summarize foreign keys.');

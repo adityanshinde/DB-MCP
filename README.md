@@ -55,7 +55,9 @@ The backend never connects to databases in write mode and rejects unsafe SQL bef
 All runtime settings are controlled from one place only: `.env` and `lib/config.ts`.
 
 ```env
-POSTGRES_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
+POSTGRES_URLS={"main":"postgresql://USER:PASSWORD@HOST:5432/MAIN_DB","reporting":"postgresql://USER:PASSWORD@HOST:5432/REPORTING_DB"}
+POSTGRES_DEFAULT=main
+POSTGRES_URL=postgresql://USER:PASSWORD@HOST:5432/MAIN_DB
 MSSQL_CONNECTION_STRING=Data Source=13.235.202.125;Initial Catalog=REPORT_DB_FROMKG;User ID=sa;Password=your_password;Encrypt=false;TrustServerCertificate=true
 GITHUB_PAT=replace_with_github_pat
 GITHUB_ORG_NAME=myorg
@@ -74,6 +76,8 @@ MCP_CACHE_L1_MAX_ENTRIES=256
 MCP_UI_ORIGIN=https://your-allowed-ui.example.com
 SQLITE_ALLOWED_DIR=C:\path\to\allowed\sqlite\dir
 ```
+
+Set `POSTGRES_URLS` to a JSON object of named connections when you need more than one Postgres database from the same MCP server. Pass the matching `connection` name when calling a Postgres tool; if you omit it, `POSTGRES_DEFAULT` is used. `POSTGRES_URL` still works as a backward-compatible single-database fallback.
 
 Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` to enable the shared L2 cache. `MCP_CACHE_L1=true` keeps the optional in-memory L1 cache on for warm instances.
 

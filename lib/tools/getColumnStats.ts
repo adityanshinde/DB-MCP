@@ -21,8 +21,8 @@ function clampLimit(limit: number | undefined): number {
   return Math.max(1, Math.min(5, requested));
 }
 
-async function getColumns(db: DBType, table: string, schema?: string, credentials?: DatabaseCredentials): Promise<Array<{ name: string; type: string; nullable: boolean }>> {
-  const result = await getTableSchema(db, table, schema, credentials);
+async function getColumns(db: DBType, table: string, schema?: string, credentials?: DatabaseCredentials, connection?: string): Promise<Array<{ name: string; type: string; nullable: boolean }>> {
+  const result = await getTableSchema(db, table, schema, credentials, connection);
   if (!result.success || !result.data) {
     throw new Error(result.error || 'Failed to read table schema.');
   }
@@ -34,7 +34,7 @@ async function getColumns(db: DBType, table: string, schema?: string, credential
   }));
 }
 
-async function getTotalRows(db: DBType, table: string, schema?: string, credentials?: DatabaseCredentials): Promise<number> {
+async function getTotalRows(db: DBType, table: string, schema?: string, credentials?: DatabaseCredentials, connection?: string): Promise<number> {
   const resolvedSchema = normalizeSchemaFilter(db, schema);
 
   if (db === 'postgres') {
@@ -42,7 +42,8 @@ async function getTotalRows(db: DBType, table: string, schema?: string, credenti
       `SELECT COUNT(*) AS count
        FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}`,
       [],
-      credentials?.postgres
+      credentials?.postgres,
+      connection
     );
     return Number(result.rows[0]?.count ?? 0);
   }
@@ -78,9 +79,9 @@ async function getTotalRows(db: DBType, table: string, schema?: string, credenti
   return 0;
 }
 
-async function getColumnStat(db: DBType, table: string, column: string, schema?: string, credentials?: DatabaseCredentials): Promise<ColumnStat> {
+async function getColumnStat(db: DBType, table: string, column: string, schema?: string, credentials?: DatabaseCredentials, connection?: string): Promise<ColumnStat> {
   const resolvedSchema = normalizeSchemaFilter(db, schema);
-  const totalRows = await getTotalRows(db, table, schema, credentials);
+  const totalRows = await getTotalRows(db, table, schema, credentials, connection);
 
   if (db === 'postgres') {
     const result = await queryPostgres<{ non_null_rows: string; null_rows: string; distinct_rows: string }>(
@@ -89,7 +90,8 @@ async function getColumnStat(db: DBType, table: string, column: string, schema?:
               COUNT(DISTINCT ${quoteIdentifier(db, column)}) AS distinct_rows
        FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}`,
       [],
-      credentials?.postgres
+      credentials?.postgres,
+      connection
     );
     const row = result.rows[0] ?? { non_null_rows: '0', null_rows: '0', distinct_rows: '0' };
     return {
@@ -182,17 +184,18 @@ export async function getColumnStats(
   table: string,
   schema?: string,
   limit?: number,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ table: string; schema: string; total_rows: number; columns: ColumnStat[]; truncated: boolean }>> {
   try {
     const rowLimit = clampLimit(limit);
     const resolvedSchema = normalizeSchemaFilter(db, schema);
-    const columns = await getColumns(db, table, schema, credentials);
+    const columns = await getColumns(db, table, schema, credentials, connection);
     const selectedColumns = columns.slice(0, rowLimit);
     const stats: ColumnStat[] = [];
 
     for (const column of selectedColumns) {
-      const stat = await getColumnStat(db, table, column.name, schema, credentials);
+      const stat = await getColumnStat(db, table, column.name, schema, credentials, connection);
       stats.push({
         ...stat,
         data_type: column.type,

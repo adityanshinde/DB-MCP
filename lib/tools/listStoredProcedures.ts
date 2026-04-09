@@ -15,13 +15,15 @@ type StoredProcedureRow = {
 
 export async function listStoredProcedures(
   db: DBType,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ procedures: { schema: string; name: string }[] }>> {
   try {
     const data = await readThroughMetadataCache({
       db,
       tool: 'listStoredProcedures',
       schema: 'all',
+      connection,
       params: { scope: 'all' },
       credentials,
       ttlSeconds: METADATA_CACHE_TTLS.procedures,
@@ -36,7 +38,8 @@ export async function listStoredProcedures(
               ORDER BY routine_schema, routine_name
             `,
             [],
-            credentials?.postgres
+            credentials?.postgres,
+            connection
           );
 
           return {

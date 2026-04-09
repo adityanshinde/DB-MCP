@@ -121,13 +121,18 @@ function injectMssqlTop(query: string): string {
   return `${query.slice(0, selectIndex)}SELECT TOP (${CONFIG.app.maxRows})${selectClause.slice('SELECT '.length)}`;
 }
 
-export async function runQuery(db: DBType, query: string, credentials?: DatabaseCredentials): Promise<ToolResponse<{ metadata: QueryMetadata; rows: unknown[] }>> {
+export async function runQuery(
+  db: DBType,
+  query: string,
+  credentials?: DatabaseCredentials,
+  connection?: string
+): Promise<ToolResponse<{ metadata: QueryMetadata; rows: unknown[] }>> {
   try {
     const validated = validateReadOnlyQuery(query);
     const executedQuery = db === 'postgres' ? injectPostgresLimit(validated) : db === 'mssql' ? injectMssqlTop(validated) : injectPostgresLimit(validated);
 
     if (db === 'postgres') {
-      const result = await queryPostgres(executedQuery, [], credentials?.postgres);
+      const result = await queryPostgres(executedQuery, [], credentials?.postgres, connection);
       return {
         success: true,
         data: {

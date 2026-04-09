@@ -61,6 +61,7 @@ const ALLOWED_ORIGIN = process.env.MCP_UI_ORIGIN?.trim() || '';
 const ALLOWED_METHODS = 'POST, GET, DELETE, OPTIONS';
 const ALLOWED_HEADERS = 'Content-Type, MCP-Protocol-Version, Mcp-Session-Id';
 const SUPPORTED_DATABASES = ['postgres', 'mssql', 'mysql', 'sqlite'] as const;
+const passthroughObject = <T extends z.ZodRawShape>(shape: T) => z.object(shape).passthrough();
 
 installProcessGuards();
 
@@ -460,11 +461,11 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES)
       })
     },
-    async ({ db }) => toTextResult(await listSchemas(db))
+    async ({ db, connection }: any) => toTextResult(await listSchemas(db, undefined, connection))
   );
 
   server.registerTool(
@@ -705,11 +706,11 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES)
       })
     },
-    async ({ db }) => toTextResult(await getDatabaseInfo(db))
+    async ({ db, connection }: any) => toTextResult(await getDatabaseInfo(db, undefined, connection))
   );
 
   server.registerTool(
@@ -723,12 +724,12 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         query: z.string().min(1)
       })
     },
-    async ({ db, query }) => toTextResult(await runQuery(db, query))
+    async ({ db, query, connection }: any) => toTextResult(await runQuery(db, query, undefined, connection))
   );
 
   server.registerTool(
@@ -742,12 +743,12 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         query: z.string().min(1)
       })
     },
-    async ({ db, query }) => toTextResult(await executeReadQuery(db, query))
+    async ({ db, query, connection }: any) => toTextResult(await executeReadQuery(db, query, undefined, connection))
   );
 
   server.registerTool(
@@ -761,11 +762,11 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES)
       })
     },
-    async ({ db }) => toTextResult(await listTables(db))
+    async ({ db, connection }: any) => toTextResult(await listTables(db, undefined, connection))
   );
 
   server.registerTool(
@@ -779,13 +780,13 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         query: z.string().min(1),
         schema: z.string().optional()
       })
     },
-    async ({ db, query, schema }) => toTextResult(await searchTables(db, query, schema))
+    async ({ db, query, schema, connection }: any) => toTextResult(await searchTables(db, query, schema, undefined, connection))
   );
 
   server.registerTool(
@@ -799,14 +800,14 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         query: z.string().min(1),
         schema: z.string().optional(),
         limit: z.number().int().min(1).max(20).default(10)
       })
     },
-    async ({ db, query, schema, limit }) => toTextResult(await searchViews(db, query, schema, limit))
+    async ({ db, query, schema, limit, connection }: any) => toTextResult(await searchViews(db, query, schema, limit, undefined, connection))
   );
 
   server.registerTool(
@@ -820,14 +821,14 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         query: z.string().min(1),
         schema: z.string().optional(),
         limit: z.number().int().min(1).max(20).default(10)
       })
     },
-    async ({ db, query, schema, limit }) => toTextResult(await searchFunctions(db, query, schema, limit))
+    async ({ db, query, schema, limit, connection }: any) => toTextResult(await searchFunctions(db, query, schema, limit, undefined, connection))
   );
 
   server.registerTool(
@@ -841,14 +842,14 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         query: z.string().min(1),
         schema: z.string().optional(),
         limit: z.number().int().min(1).max(20).default(10)
       })
     },
-    async ({ db, query, schema, limit }) => toTextResult(await searchProcedures(db, query, schema, limit))
+    async ({ db, query, schema, limit, connection }: any) => toTextResult(await searchProcedures(db, query, schema, limit, undefined, connection))
   );
 
   server.registerTool(
@@ -862,14 +863,14 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         query: z.string().min(1),
         schema: z.string().optional(),
         limit: z.number().int().min(1).max(20).default(10)
       })
     },
-    async ({ db, query, schema, limit }) => toTextResult(await searchColumns(db, query, schema, limit))
+    async ({ db, query, schema, limit, connection }: any) => toTextResult(await searchColumns(db, query, schema, limit, undefined, connection))
   );
 
   server.registerTool(
@@ -883,13 +884,13 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         table: z.string().min(1),
         schema: z.string().optional()
       })
     },
-    async ({ db, table, schema }) => toTextResult(await getTableSchema(db, table, schema))
+    async ({ db, table, schema, connection }: any) => toTextResult(await getTableSchema(db, table, schema, undefined, connection))
   );
 
   server.registerTool(
@@ -903,13 +904,13 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         table: z.string().min(1),
         schema: z.string().optional()
       })
     },
-    async ({ db, table, schema }) => toTextResult(await getTableSummary(db, table, schema))
+    async ({ db, table, schema, connection }: any) => toTextResult(await getTableSummary(db, table, schema, undefined, connection))
   );
 
   server.registerTool(
@@ -923,13 +924,13 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         view: z.string().min(1),
         schema: z.string().optional()
       })
     },
-    async ({ db, view, schema }) => toTextResult(await getViewDefinition(db, view, schema))
+    async ({ db, view, schema, connection }: any) => toTextResult(await getViewDefinition(db, view, schema, undefined, connection))
   );
 
   server.registerTool(
@@ -943,13 +944,13 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         view: z.string().min(1),
         schema: z.string().optional()
       })
     },
-    async ({ db, view, schema }) => toTextResult(await getViewSummary(db, view, schema))
+    async ({ db, view, schema, connection }: any) => toTextResult(await getViewSummary(db, view, schema, undefined, connection))
   );
 
   server.registerTool(
@@ -963,13 +964,13 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         procedure: z.string().min(1),
         schema: z.string().optional()
       })
     },
-    async ({ db, procedure, schema }) => toTextResult(await getProcedureSummary(db, procedure, schema))
+    async ({ db, procedure, schema, connection }: any) => toTextResult(await getProcedureSummary(db, procedure, schema, undefined, connection))
   );
 
   server.registerTool(
@@ -983,13 +984,13 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         func: z.string().min(1),
         schema: z.string().optional()
       })
     },
-    async ({ db, func, schema }) => toTextResult(await getFunctionSummary(db, func, schema))
+    async ({ db, func, schema, connection }: any) => toTextResult(await getFunctionSummary(db, func, schema, undefined, connection))
   );
 
   server.registerTool(
@@ -1003,14 +1004,14 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         table: z.string().min(1),
         schema: z.string().optional(),
         limit: z.number().int().min(1).max(5).default(5)
       })
     },
-    async ({ db, table, schema, limit }) => toTextResult(await getSampleRows(db, table, schema, limit))
+    async ({ db, table, schema, limit, connection }: any) => toTextResult(await getSampleRows(db, table, schema, limit, undefined, connection))
   );
 
   server.registerTool(
@@ -1024,7 +1025,7 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         table: z.string().min(1),
         schema: z.string().optional(),
@@ -1032,8 +1033,8 @@ export function createMcpServer(): McpServer {
         limit: z.number().int().min(1).max(5).default(5)
       })
     },
-    async ({ db, table, schema, columns, limit }) =>
-      toTextResult(await getTableSampleByColumns(db, table, schema, columns, limit))
+    async ({ db, table, schema, columns, limit, connection }: any) =>
+      toTextResult(await getTableSampleByColumns(db, table, schema, columns, limit, undefined, connection))
   );
 
   server.registerTool(
@@ -1047,13 +1048,13 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         table: z.string().min(1),
         schema: z.string().optional()
       })
     },
-    async ({ db, table, schema }) => toTextResult(await getRowCount(db, table, schema))
+    async ({ db, table, schema, connection }: any) => toTextResult(await getRowCount(db, table, schema, undefined, connection))
   );
 
   server.registerTool(
@@ -1067,12 +1068,12 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         query: z.string().min(1)
       })
     },
-    async ({ db, query }) => toTextResult(await explainQuery(db, query))
+    async ({ db, query, connection }: any) => toTextResult(await explainQuery(db, query, undefined, connection))
   );
 
   server.registerTool(
@@ -1086,7 +1087,7 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         left_table: z.string().min(1),
         right_table: z.string().min(1),
@@ -1094,8 +1095,8 @@ export function createMcpServer(): McpServer {
         right_schema: z.string().optional()
       })
     },
-    async ({ db, left_table, right_table, left_schema, right_schema }) =>
-      toTextResult(await compareSchema(db, left_table, right_table, left_schema, right_schema))
+    async ({ db, left_table, right_table, left_schema, right_schema, connection }: any) =>
+      toTextResult(await compareSchema(db, left_table, right_table, left_schema, right_schema, undefined, connection))
   );
 
   server.registerTool(
@@ -1109,7 +1110,7 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         object_type: z.enum(['table', 'view', 'procedure', 'function']),
         left_name: z.string().min(1),
@@ -1119,8 +1120,8 @@ export function createMcpServer(): McpServer {
         right_schema: z.string().optional()
       })
     },
-    async ({ db, object_type, left_name, right_name, schema, left_schema, right_schema }) =>
-      toTextResult(await compareObjectVersions(db, object_type, left_name, right_name, schema, left_schema, right_schema))
+    async ({ db, object_type, left_name, right_name, schema, left_schema, right_schema, connection }: any) =>
+      toTextResult(await compareObjectVersions(db, object_type, left_name, right_name, schema, left_schema, right_schema, undefined, connection))
   );
 
   server.registerTool(
@@ -1134,14 +1135,14 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         table: z.string().optional(),
         schema: z.string().optional(),
         limit: z.number().int().min(1).max(20).default(10)
       })
     },
-    async ({ db, table, schema, limit }) => toTextResult(await getDependencyGraph(db, table, schema, limit))
+    async ({ db, table, schema, limit, connection }: any) => toTextResult(await getDependencyGraph(db, table, schema, limit, undefined, connection))
   );
 
   server.registerTool(
@@ -1155,14 +1156,14 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         table: z.string().min(1),
         schema: z.string().optional(),
         limit: z.number().int().min(1).max(5).default(5)
       })
     },
-    async ({ db, table, schema, limit }) => toTextResult(await getColumnStats(db, table, schema, limit))
+    async ({ db, table, schema, limit, connection }: any) => toTextResult(await getColumnStats(db, table, schema, limit, undefined, connection))
   );
 
   server.registerTool(
@@ -1176,13 +1177,13 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         table: z.string().optional(),
         schema: z.string().optional()
       })
     },
-    async ({ db, table, schema }) => toTextResult(await getRelationships(db, table, schema))
+    async ({ db, table, schema, connection }: any) => toTextResult(await getRelationships(db, table, schema, undefined, connection))
   );
 
   server.registerTool(
@@ -1196,7 +1197,7 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         source_table: z.string().min(1),
         target_table: z.string().min(1),
@@ -1204,8 +1205,8 @@ export function createMcpServer(): McpServer {
         limit: z.number().int().min(1).max(20).default(10)
       })
     },
-    async ({ db, source_table, target_table, schema, limit }) =>
-      toTextResult(await getRelationPath(db, source_table, target_table, schema, limit))
+    async ({ db, source_table, target_table, schema, limit, connection }: any) =>
+      toTextResult(await getRelationPath(db, source_table, target_table, schema, limit, undefined, connection))
   );
 
   server.registerTool(
@@ -1219,13 +1220,13 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         table: z.string().optional(),
         schema: z.string().optional()
       })
     },
-    async ({ db, table, schema }) => toTextResult(await getIndexes(db, table, schema))
+    async ({ db, table, schema, connection }: any) => toTextResult(await getIndexes(db, table, schema, undefined, connection))
   );
 
   server.registerTool(
@@ -1239,13 +1240,13 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES),
         table: z.string().optional(),
         schema: z.string().optional()
       })
     },
-    async ({ db, table, schema }) => toTextResult(await getConstraints(db, table, schema))
+    async ({ db, table, schema, connection }: any) => toTextResult(await getConstraints(db, table, schema, undefined, connection))
   );
 
   server.registerTool(
@@ -1259,11 +1260,11 @@ export function createMcpServer(): McpServer {
         idempotentHint: true,
         openWorldHint: true
       },
-      inputSchema: z.object({
+      inputSchema: passthroughObject({
         db: z.enum(SUPPORTED_DATABASES)
       })
     },
-    async ({ db }) => toTextResult(await listStoredProcedures(db))
+    async ({ db, connection }: any) => toTextResult(await listStoredProcedures(db, undefined, connection))
   );
 
   return server;

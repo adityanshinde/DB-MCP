@@ -34,11 +34,12 @@ export async function getRelationPath(
   targetTable: string,
   schema?: string,
   limit?: number,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ source: string; target: string; found: boolean; path: string[]; edges: RelationEdge[]; truncated: boolean }>> {
   try {
     const resolvedSchema = resolveSchema(db, schema);
-    const result = await getRelationships(db, undefined, schema, credentials);
+    const result = await getRelationships(db, undefined, schema, credentials, connection);
 
     if (!result.success || !result.data) {
       return {

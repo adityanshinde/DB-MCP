@@ -28,7 +28,8 @@ export async function searchFunctions(
   query: string,
   schema?: string,
   limit?: number,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ query: string; matches: Array<{ schema?: string; function: string; return_type?: string }> }>> {
   try {
     const search = query.trim();
@@ -51,7 +52,8 @@ export async function searchFunctions(
          ORDER BY routine_schema, routine_name
          LIMIT $3`,
         [schemas, `%${search}%`, rowLimit],
-        credentials?.postgres
+        credentials?.postgres,
+        connection
       );
 
       return {

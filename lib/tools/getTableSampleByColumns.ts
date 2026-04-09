@@ -17,8 +17,8 @@ function normalizeRequestedColumns(columns: string[] | undefined, availableColum
   return filtered.slice(0, 5);
 }
 
-async function getAvailableColumns(db: DBType, table: string, schema?: string, credentials?: DatabaseCredentials): Promise<string[]> {
-  const result = await getTableSchema(db, table, schema, credentials);
+async function getAvailableColumns(db: DBType, table: string, schema?: string, credentials?: DatabaseCredentials, connection?: string): Promise<string[]> {
+  const result = await getTableSchema(db, table, schema, credentials, connection);
   if (!result.success || !result.data) {
     throw new Error(result.error || 'Failed to read table schema.');
   }
@@ -34,12 +34,13 @@ export async function getTableSampleByColumns(
   schema?: string,
   columns?: string[],
   limit?: number,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ table: string; schema: string; columns: string[]; row_limit: number; rows: Array<Record<string, unknown>>; truncated: boolean }>> {
   try {
     const rowLimit = clampRowLimit(limit);
     const resolvedSchema = normalizeSchemaFilter(db, schema);
-    const availableColumns = await getAvailableColumns(db, table, schema, credentials);
+    const availableColumns = await getAvailableColumns(db, table, schema, credentials, connection);
     const selectedColumns = normalizeRequestedColumns(columns, availableColumns);
 
     if (selectedColumns.length === 0) {
@@ -54,7 +55,8 @@ export async function getTableSampleByColumns(
          FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}
          LIMIT $1`,
         [rowLimit],
-        credentials?.postgres
+        credentials?.postgres,
+        connection
       );
 
       return {

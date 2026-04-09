@@ -7,7 +7,8 @@ import type { DBType, DatabaseCredentials, ToolResponse } from '@/lib/types';
 
 export async function listSchemas(
   db: DBType,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ schemas: string[] }>> {
   try {
     if (db === 'postgres') {
@@ -17,7 +18,8 @@ export async function listSchemas(
          WHERE schema_name NOT IN ('information_schema', 'pg_catalog')
          ORDER BY schema_name`,
         [],
-        credentials?.postgres
+        credentials?.postgres,
+        connection
       );
 
       const allowedSchemas = new Set(CONFIG.app.allowedSchemas);

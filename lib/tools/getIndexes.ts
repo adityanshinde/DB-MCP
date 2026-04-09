@@ -25,7 +25,8 @@ export async function getIndexes(
   db: DBType,
   table?: string,
   schema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ indexes: Array<Record<string, unknown>> }>> {
   try {
     const resolvedSchema = resolveSchema(db, schema);
@@ -49,7 +50,8 @@ export async function getIndexes(
                AND ($2::text IS NULL OR tablename = $2)
              ORDER BY tablename, indexname`,
             [resolvedSchema, table ?? null],
-            credentials?.postgres
+            credentials?.postgres,
+            connection
           );
 
           return { indexes: result.rows };

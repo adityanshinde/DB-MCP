@@ -20,7 +20,8 @@ export async function getViewDefinition(
   db: DBType,
   view: string,
   schema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ view: string; schema?: string; definition: string | null }>> {
   try {
     if (db === 'postgres') {
@@ -33,7 +34,8 @@ export async function getViewDefinition(
          WHERE table_schema = $1
            AND table_name = $2`,
         [resolvedSchema, view],
-        credentials?.postgres
+        credentials?.postgres,
+        connection
       );
 
       const row = result.rows[0] ?? null;

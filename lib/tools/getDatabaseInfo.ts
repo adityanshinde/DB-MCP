@@ -6,7 +6,8 @@ import type { DBType, DatabaseCredentials, ToolResponse } from '@/lib/types';
 
 export async function getDatabaseInfo(
   db: DBType,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ database: Record<string, unknown> }>> {
   try {
     if (db === 'postgres') {
@@ -16,7 +17,8 @@ export async function getDatabaseInfo(
                 current_schema() AS current_schema,
                 version() AS version`,
         [],
-        credentials?.postgres
+        credentials?.postgres,
+        connection
       );
 
       return {

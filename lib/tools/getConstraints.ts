@@ -25,7 +25,8 @@ export async function getConstraints(
   db: DBType,
   table?: string,
   schema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ constraints: Array<Record<string, unknown>> }>> {
   try {
     const resolvedSchema = resolveSchema(db, schema);
@@ -62,7 +63,8 @@ export async function getConstraints(
                AND ($2::text IS NULL OR tc.table_name = $2)
              ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position`,
             [resolvedSchema, table ?? null],
-            credentials?.postgres
+            credentials?.postgres,
+            connection
           );
 
           return { constraints: result.rows };

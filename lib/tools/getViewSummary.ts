@@ -17,7 +17,7 @@ function quoteSqlite(identifier: string): string {
   return `"${identifier.replace(/"/g, '""')}"`;
 }
 
-async function getColumns(db: DBType, view: string, schema?: string, credentials?: DatabaseCredentials): Promise<ColumnRow[]> {
+async function getColumns(db: DBType, view: string, schema?: string, credentials?: DatabaseCredentials, connection?: string): Promise<ColumnRow[]> {
   if (db === 'postgres') {
     const resolvedSchema = normalizeSchemaFilter(db, schema);
     const result = await queryPostgres<ColumnRow>(
@@ -28,7 +28,8 @@ async function getColumns(db: DBType, view: string, schema?: string, credentials
        WHERE table_schema = $1 AND table_name = $2
        ORDER BY ordinal_position`,
       [resolvedSchema, view],
-      credentials?.postgres
+      credentials?.postgres,
+      connection
     );
     return result.rows;
   }
@@ -70,7 +71,7 @@ async function getColumns(db: DBType, view: string, schema?: string, credentials
   return [];
 }
 
-async function getDefinition(db: DBType, view: string, schema?: string, credentials?: DatabaseCredentials): Promise<string> {
+async function getDefinition(db: DBType, view: string, schema?: string, credentials?: DatabaseCredentials, connection?: string): Promise<string> {
   if (db === 'postgres') {
     const resolvedSchema = normalizeSchemaFilter(db, schema);
     const result = await queryPostgres<{ definition: string | null }>(
@@ -78,7 +79,8 @@ async function getDefinition(db: DBType, view: string, schema?: string, credenti
        FROM information_schema.views
        WHERE table_schema = $1 AND table_name = $2`,
       [resolvedSchema, view],
-      credentials?.postgres
+      credentials?.postgres,
+      connection
     );
     return result.rows[0]?.definition ?? '';
   }
@@ -125,7 +127,8 @@ export async function getViewSummary(
   db: DBType,
   view: string,
   schema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ view: string; schema: string; column_count: number; columns_preview: ColumnRow[]; has_more_columns: boolean; definition_preview: string }>> {
   try {
     const resolvedSchema = normalizeSchemaFilter(db, schema);
@@ -133,12 +136,13 @@ export async function getViewSummary(
       db,
       tool: 'getViewSummary',
       schema: resolvedSchema,
+      connection,
       params: { view },
       credentials,
       ttlSeconds: METADATA_CACHE_TTLS.summary,
       fetcher: async () => {
-        const columns = await getColumns(db, view, schema, credentials);
-        const definition = await getDefinition(db, view, schema, credentials);
+        const columns = await getColumns(db, view, schema, credentials, connection);
+        const definition = await getDefinition(db, view, schema, credentials, connection);
         const previewLimit = CONFIG.app.previewRows || 5;
         const columnsPreview = columns.slice(0, previewLimit);
 

@@ -25,7 +25,8 @@ export async function searchTables(
   db: DBType,
   query: string,
   schema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ query: string; matches: Array<{ schema?: string; table: string }> }>> {
   try {
     const search = query.trim();
@@ -43,7 +44,8 @@ export async function searchTables(
            AND tablename ILIKE $2
          ORDER BY schemaname, tablename`,
         [schemas, `%${search}%`],
-        credentials?.postgres
+        credentials?.postgres,
+        connection
       );
 
       return {

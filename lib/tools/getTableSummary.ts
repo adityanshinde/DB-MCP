@@ -31,7 +31,7 @@ function quoteSqlite(identifier: string): string {
   return `"${identifier.replace(/"/g, '""')}"`;
 }
 
-async function getColumns(db: DBType, table: string, schema?: string, credentials?: DatabaseCredentials): Promise<ColumnRow[]> {
+async function getColumns(db: DBType, table: string, schema?: string, credentials?: DatabaseCredentials, connection?: string): Promise<ColumnRow[]> {
   if (db === 'postgres') {
     const resolvedSchema = normalizeSchemaFilter(db, schema);
     const result = await queryPostgres<{ name: string; type: string; nullable: boolean; ordinal_position: number }>(
@@ -43,7 +43,8 @@ async function getColumns(db: DBType, table: string, schema?: string, credential
        WHERE table_schema = $1 AND table_name = $2
        ORDER BY ordinal_position`,
       [resolvedSchema, table],
-      credentials?.postgres
+      credentials?.postgres,
+      connection
     );
 
     return result.rows;
@@ -106,7 +107,7 @@ async function getColumns(db: DBType, table: string, schema?: string, credential
   return [];
 }
 
-async function getPrimaryKeyColumns(db: DBType, table: string, schema?: string, credentials?: DatabaseCredentials): Promise<string[]> {
+async function getPrimaryKeyColumns(db: DBType, table: string, schema?: string, credentials?: DatabaseCredentials, connection?: string): Promise<string[]> {
   if (db === 'postgres') {
     const resolvedSchema = normalizeSchemaFilter(db, schema);
     const result = await queryPostgres<{ column_name: string }>(
@@ -120,7 +121,8 @@ async function getPrimaryKeyColumns(db: DBType, table: string, schema?: string, 
          AND tc.table_name = $2
        ORDER BY kcu.ordinal_position`,
       [resolvedSchema, table],
-      credentials?.postgres
+      credentials?.postgres,
+      connection
     );
 
     return result.rows.map((row) => row.column_name);
@@ -173,7 +175,8 @@ export async function getTableSummary(
   db: DBType,
   table: string,
   schema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ table: string; schema: string; column_count: number; columns_preview: ColumnRow[]; has_more_columns: boolean; primary_key_columns: string[] }>> {
   try {
     const resolvedSchema = normalizeSchemaFilter(db, schema);
@@ -181,12 +184,13 @@ export async function getTableSummary(
       db,
       tool: 'getTableSummary',
       schema: resolvedSchema,
+      connection,
       params: { table },
       credentials,
       ttlSeconds: METADATA_CACHE_TTLS.summary,
       fetcher: async () => {
-        const columns = await getColumns(db, table, schema, credentials);
-        const primaryKeyColumns = await getPrimaryKeyColumns(db, table, schema, credentials);
+        const columns = await getColumns(db, table, schema, credentials, connection);
+        const primaryKeyColumns = await getPrimaryKeyColumns(db, table, schema, credentials, connection);
         const previewLimit = CONFIG.app.previewRows || 5;
         const columnsPreview = columns.slice(0, previewLimit).map((column) => ({
           name: column.name,

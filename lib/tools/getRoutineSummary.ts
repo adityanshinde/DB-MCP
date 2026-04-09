@@ -18,7 +18,7 @@ function isSupportedDatabase(db: DBType): boolean {
   return db === 'postgres' || db === 'mssql' || db === 'mysql';
 }
 
-async function getRoutineRow(db: DBType, kind: RoutineKind, name: string, schema?: string, credentials?: DatabaseCredentials) {
+async function getRoutineRow(db: DBType, kind: RoutineKind, name: string, schema?: string, credentials?: DatabaseCredentials, connection?: string) {
   if (db === 'postgres') {
     const resolvedSchema = normalizeSchemaFilter(db, schema);
     const result = await queryPostgres<{ routine_schema: string; routine_name: string; routine_type: string; data_type: string | null; routine_definition: string | null }>(
@@ -30,7 +30,8 @@ async function getRoutineRow(db: DBType, kind: RoutineKind, name: string, schema
        FROM information_schema.routines
        WHERE routine_type = $1 AND routine_schema = $2 AND routine_name = $3`,
       [kind, resolvedSchema, name],
-      credentials?.postgres
+      credentials?.postgres,
+      connection
     );
     return result.rows[0] ?? null;
   }
@@ -68,7 +69,7 @@ async function getRoutineRow(db: DBType, kind: RoutineKind, name: string, schema
   return null;
 }
 
-async function getParameters(db: DBType, name: string, schema?: string, credentials?: DatabaseCredentials): Promise<RoutineParameter[]> {
+async function getParameters(db: DBType, name: string, schema?: string, credentials?: DatabaseCredentials, connection?: string): Promise<RoutineParameter[]> {
   if (db === 'postgres') {
     return [];
   }
@@ -112,7 +113,8 @@ export async function getRoutineSummary(
   kind: RoutineKind,
   name: string,
   schema?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ supported: boolean; routine: Record<string, unknown> | null; parameters: RoutineParameter[] }>> {
   try {
     if (!isSupportedDatabase(db)) {
@@ -127,12 +129,13 @@ export async function getRoutineSummary(
       db,
       tool: 'getRoutineSummary',
       schema: resolvedSchema,
+      connection,
       params: { kind, name },
       credentials,
       ttlSeconds: METADATA_CACHE_TTLS.summary,
       fetcher: async () => {
-        const routine = await getRoutineRow(db, kind, name, schema, credentials);
-        const parameters = await getParameters(db, name, schema, credentials);
+        const routine = await getRoutineRow(db, kind, name, schema, credentials, connection);
+        const parameters = await getParameters(db, name, schema, credentials, connection);
 
         if (!routine) {
           return { supported: true, routine: null, parameters: [] };

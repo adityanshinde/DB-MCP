@@ -15,7 +15,8 @@ export async function getSampleRows(
   table: string,
   schema?: string,
   limit?: number,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ table: string; schema: string; limit: number; rows: unknown[] }>> {
   try {
     const rowLimit = clampLimit(limit);
@@ -27,7 +28,8 @@ export async function getSampleRows(
          FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}
          LIMIT $1`,
         [rowLimit],
-        credentials?.postgres
+        credentials?.postgres,
+        connection
       );
 
       return {

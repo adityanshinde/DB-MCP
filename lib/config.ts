@@ -5,9 +5,48 @@ function parseList(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+function parseJsonRecord(value: string | undefined): Record<string, string> {
+  if (!value?.trim()) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return Object.entries(parsed).reduce<Record<string, string>>((accumulator, [key, entry]) => {
+      if (typeof entry === 'string' && key.trim()) {
+        accumulator[key.trim()] = entry.trim();
+      }
+
+      return accumulator;
+    }, {});
+  } catch {
+    return {};
+  }
+}
+
+function resolveDefaultPostgresConnection(connections: Record<string, string>): string {
+  const explicit = process.env.POSTGRES_DEFAULT?.trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  const firstConnection = Object.keys(connections)[0];
+  return firstConnection || 'default';
+}
+
+const legacyPostgresUrl = process.env.POSTGRES_URL?.trim() || '';
+const parsedPostgresConnections = parseJsonRecord(process.env.POSTGRES_URLS);
+const postgresConnections = Object.keys(parsedPostgresConnections).length > 0
+  ? parsedPostgresConnections
+  : legacyPostgresUrl
+    ? { default: legacyPostgresUrl }
+    : {};
+
 export const CONFIG = {
   postgres: {
-    url: process.env.POSTGRES_URL || ''
+    url: legacyPostgresUrl,
+    defaultConnection: resolveDefaultPostgresConnection(postgresConnections),
+    connections: postgresConnections
   },
   mssql: {
     connectionString: process.env.MSSQL_CONNECTION_STRING || '',

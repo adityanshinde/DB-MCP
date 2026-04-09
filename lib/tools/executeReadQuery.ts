@@ -30,7 +30,8 @@ function applyResultLimit(db: DBType, query: string): string {
 export async function executeReadQuery(
   db: DBType,
   query: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connection?: string
 ): Promise<ToolResponse<{ metadata: QueryMetadata; rows: unknown[] }>> {
   logMcpEvent('tool.execute.start', { tool: 'db.execute_read_query', db });
 
@@ -39,7 +40,7 @@ export async function executeReadQuery(
     const executedQuery = applyResultLimit(db, validated);
 
     if (db === 'postgres') {
-      const result = await queryPostgres(executedQuery, [], credentials?.postgres);
+      const result = await queryPostgres(executedQuery, [], credentials?.postgres, connection);
       logMcpEvent('tool.execute.success', { tool: 'db.execute_read_query', db, rowCount: result.rowCount });
       return {
         success: true,
