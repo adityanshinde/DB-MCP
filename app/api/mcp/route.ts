@@ -469,7 +469,7 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
-    'github.list_org_repos',
+    'github_list_org_repos',
     {
       title: 'GitHub List Org Repos',
       description: 'List allowlisted repositories within a configured GitHub organization, using bounded pagination.',
@@ -492,7 +492,7 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
-    'github.get_repo_tree',
+    'github_get_repo_tree',
     {
       title: 'GitHub Get Repo Tree',
       description: 'Explore an allowlisted GitHub repository tree with a bounded depth and result cap.',
@@ -514,7 +514,7 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
-    'github.get_file_content',
+    'github_get_file_content',
     {
       title: 'GitHub Get File Content',
       description: 'Fetch the contents of a single allowlisted repository file.',
@@ -535,7 +535,7 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
-    'github.search_code',
+    'github_search_code',
     {
       title: 'GitHub Search Code',
       description: 'Search within an allowlisted GitHub repository using read-only code search.',
@@ -557,7 +557,7 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
-    'github.file_summary',
+    'github_file_summary',
     {
       title: 'GitHub File Summary',
       description: 'Return a compact bounded summary for a single file in an allowlisted repository.',
@@ -581,7 +581,7 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
-    'github.module_summary',
+    'github_module_summary',
     {
       title: 'GitHub Module Summary',
       description: 'Return a compact bounded summary for a repository folder.',
@@ -605,7 +605,7 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
-    'github.get_commit_history',
+    'github_get_commit_history',
     {
       title: 'GitHub Commit History',
       description: 'List recent commits for a repository, optionally filtered by branch, path, or author.',
@@ -630,7 +630,7 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
-    'github.get_file_history',
+    'github_get_file_history',
     {
       title: 'GitHub File History',
       description: 'List commit history for a single file to show who changed it over time.',
@@ -654,7 +654,7 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
-    'github.compare_refs',
+    'github_compare_refs',
     {
       title: 'GitHub Compare Refs',
       description: 'Compare two branches, tags, or commits and return a compact diff summary.',
@@ -676,7 +676,7 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
-    'github.get_pull_request_comments',
+    'github_get_pull_request_comments',
     {
       title: 'GitHub Pull Request Comments',
       description: 'Return issue comments, review comments, and review submissions for a pull request.',
@@ -733,7 +733,7 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
-    'db.execute_read_query',
+    'db_execute_read_query',
     {
       title: 'Execute Read Query',
       description: 'Execute a strictly validated SELECT-only query with a hard result cap.',
@@ -1351,10 +1351,10 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
-      case 'db.execute_read_query': {
-        const input = body.input as ToolRequestWithCredentials<'db.execute_read_query'>['input'];
+      case 'db_execute_read_query': {
+        const input = body.input as ToolRequestWithCredentials<'db_execute_read_query'>['input'];
         if (!input?.db || !input?.query) {
-          return withCors(jsonError('db.execute_read_query requires db and query.', 400));
+          return withCors(jsonError('db_execute_read_query requires db and query.', 400));
         }
 
         const result = await executeReadQuery(input.db, input.query, body.credentials);
@@ -1371,38 +1371,38 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
-      case 'github.get_repo_tree': {
-        const input = body.input as ToolRequestWithCredentials<'github.get_repo_tree'>['input'];
+      case 'github_get_repo_tree': {
+        const input = body.input as ToolRequestWithCredentials<'github_get_repo_tree'>['input'];
         if (!input?.repo && !input?.org) {
-          return withCors(jsonError('github.get_repo_tree requires repo or org.', 400));
+          return withCors(jsonError('github_get_repo_tree requires repo or org.', 400));
         }
 
         const result = await getRepoTree(input.repo, input.path, input.branch, input.depth, input.org);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
-      case 'github.get_file_content': {
-        const input = body.input as ToolRequestWithCredentials<'github.get_file_content'>['input'];
+      case 'github_get_file_content': {
+        const input = body.input as ToolRequestWithCredentials<'github_get_file_content'>['input'];
         if ((!input?.repo && !input?.org) || !input?.path) {
-          return withCors(jsonError('github.get_file_content requires repo or org and path.', 400));
+          return withCors(jsonError('github_get_file_content requires repo or org and path.', 400));
         }
 
         const result = await getFileContent(input.repo, input.path, input.branch, input.org);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
-      case 'github.search_code': {
-        const input = body.input as ToolRequestWithCredentials<'github.search_code'>['input'];
+      case 'github_search_code': {
+        const input = body.input as ToolRequestWithCredentials<'github_search_code'>['input'];
         if ((!input?.repo && !input?.org) || !input?.query) {
-          return withCors(jsonError('github.search_code requires repo or org and query.', 400));
+          return withCors(jsonError('github_search_code requires repo or org and query.', 400));
         }
 
         const result = await searchCode(input.repo, input.query, input.limit, input.language, input.org);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
-      case 'github.list_org_repos': {
-        const input = body.input as ToolRequestWithCredentials<'github.list_org_repos'>['input'];
+      case 'github_list_org_repos': {
+        const input = body.input as ToolRequestWithCredentials<'github_list_org_repos'>['input'];
         const result = await listOrgRepos({
           org: input?.org,
           page: input?.page,
@@ -1414,20 +1414,20 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
-      case 'github.file_summary': {
-        const input = body.input as ToolRequestWithCredentials<'github.file_summary'>['input'];
+      case 'github_file_summary': {
+        const input = body.input as ToolRequestWithCredentials<'github_file_summary'>['input'];
         if (!input?.path || (!input?.repo && !input?.org)) {
-          return withCors(jsonError('github.file_summary requires repo or org and path.', 400));
+          return withCors(jsonError('github_file_summary requires repo or org and path.', 400));
         }
 
         const result = await fileSummary(input);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
-      case 'github.module_summary': {
-        const input = body.input as ToolRequestWithCredentials<'github.module_summary'>['input'];
+      case 'github_module_summary': {
+        const input = body.input as ToolRequestWithCredentials<'github_module_summary'>['input'];
         if (!input?.path || (!input?.repo && !input?.org)) {
-          return withCors(jsonError('github.module_summary requires repo or org and path.', 400));
+          return withCors(jsonError('github_module_summary requires repo or org and path.', 400));
         }
 
         const result = await moduleSummary(input);

@@ -1,6 +1,7 @@
 import { CONFIG } from '@/lib/config';
 
 const GITHUB_REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const GITHUB_REPO_ALLOWLIST_PATTERN = /^[A-Za-z0-9_.-]+\/(\*|[A-Za-z0-9_.-]+)$/;
 
 export function normalizeGitHubRepository(repository: string): string {
   const normalized = repository.trim();
@@ -16,6 +17,31 @@ export function normalizeGitHubRepository(repository: string): string {
   return normalized;
 }
 
+function normalizeGitHubRepositoryAllowlistEntry(entry: string): string {
+  const normalized = entry.trim().toLowerCase();
+
+  if (!normalized) {
+    throw new Error('GitHub repository allowlist entry is required.');
+  }
+
+  if (!GITHUB_REPO_ALLOWLIST_PATTERN.test(normalized)) {
+    throw new Error('GitHub repository allowlist entries must use owner/repo or owner/* format.');
+  }
+
+  return normalized;
+}
+
+export function matchesGitHubRepositoryAllowlistEntry(repository: string, allowlistEntry: string): boolean {
+  const normalizedRepository = normalizeGitHubRepository(repository).toLowerCase();
+  const normalizedEntry = normalizeGitHubRepositoryAllowlistEntry(allowlistEntry);
+
+  if (normalizedEntry.endsWith('/*')) {
+    return normalizedRepository.startsWith(`${normalizedEntry.slice(0, -1)}`);
+  }
+
+  return normalizedRepository === normalizedEntry;
+}
+
 export function ensureAllowedGitHubRepository(repository: string): string {
   const normalized = normalizeGitHubRepository(repository).toLowerCase();
   const allowedRepos = CONFIG.github.allowedRepos;
@@ -24,8 +50,7 @@ export function ensureAllowedGitHubRepository(repository: string): string {
     throw new Error('GitHub repositories are not configured. Set GITHUB_ALLOWED_REPOS first.');
   }
 
-  const allowedSet = new Set(allowedRepos.map((repo) => repo.toLowerCase()));
-  if (!allowedSet.has(normalized)) {
+  if (!allowedRepos.some((repo) => matchesGitHubRepositoryAllowlistEntry(normalized, repo))) {
     throw new Error(`Repository ${normalized} is not allowlisted.`);
   }
 

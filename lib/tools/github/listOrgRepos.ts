@@ -8,6 +8,7 @@ import {
 import { getAllowedReposForOrgName, resolveGitHubOrgForListing } from '@/lib/tools/github/repoResolver';
 import { logMcpError, logMcpEvent } from '@/lib/runtime/observability';
 import type { ToolResponse } from '@/lib/types';
+import { matchesGitHubRepositoryAllowlistEntry } from '@/lib/validators/githubValidator';
 
 type GitHubRepositorySummary = {
   name: string;
@@ -77,8 +78,9 @@ async function loadOrgRepos(input: Required<Pick<GitHubListOrgReposInput, 'org' 
     throw new Error(`No allowlisted repositories configured for organization ${input.org}.`);
   }
 
-  const allowedSet = new Set(allowedRepos.map((repo) => repo.toLowerCase()));
-  const filtered = response.filter((repo) => allowedSet.has(repo.full_name.toLowerCase()));
+  const filtered = response.filter((repo) =>
+    allowedRepos.some((allowedRepo) => matchesGitHubRepositoryAllowlistEntry(repo.full_name, allowedRepo))
+  );
   recordGitHubOrgRepoListFilteredOut(response.length - filtered.length);
 
   return {
@@ -104,7 +106,7 @@ async function loadOrgRepos(input: Required<Pick<GitHubListOrgReposInput, 'org' 
 }
 
 export async function listOrgRepos(input: GitHubListOrgReposInput): Promise<ToolResponse<GitHubListOrgReposOutput>> {
-  logMcpEvent('tool.execute.start', { tool: 'github.list_org_repos', org: input.org });
+  logMcpEvent('tool.execute.start', { tool: 'github_list_org_repos', org: input.org });
 
   try {
     const org = resolveGitHubOrgForListing(input.org);
@@ -141,7 +143,7 @@ export async function listOrgRepos(input: GitHubListOrgReposInput): Promise<Tool
       error: null
     };
   } catch (error) {
-    logMcpError('tool.execute.failed', error, { tool: 'github.list_org_repos', org: input.org });
+    logMcpError('tool.execute.failed', error, { tool: 'github_list_org_repos', org: input.org });
     return {
       success: false,
       data: null,

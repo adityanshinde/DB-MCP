@@ -62,7 +62,7 @@ MSSQL_CONNECTION_STRING=Data Source=13.235.202.125;Initial Catalog=REPORT_DB_FRO
 GITHUB_PAT=replace_with_github_pat
 GITHUB_ORG_NAME=myorg
 GITHUB_ALLOWED_ORGS=myorg
-GITHUB_ALLOWED_REPOS=owner1/repo1,owner2/repo2
+GITHUB_ALLOWED_REPOS=owner1/repo1,owner2/repo2,owner3/*
 GITHUB_MAX_FILE_SIZE_BYTES=300000
 GITHUB_TREE_MAX_DEPTH=3
 GITHUB_ORG_REPO_PAGE_SIZE=30
@@ -81,7 +81,7 @@ Set `POSTGRES_URLS` to a JSON object of named connections when you need more tha
 
 Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` to enable the shared L2 cache. `MCP_CACHE_L1=true` keeps the optional in-memory L1 cache on for warm instances.
 
-Set `GITHUB_PAT`, `GITHUB_ORG_NAME`, and `GITHUB_ALLOWED_REPOS` to enable the read-only GitHub tools. The allowlist is required and only `owner/repo` pairs in that list can be accessed. `GITHUB_ALLOWED_ORGS` lets you restrict org-level listing. `GITHUB_MAX_FILE_SIZE_BYTES` keeps file fetches bounded, `GITHUB_TREE_MAX_DEPTH` limits repository tree traversal, `GITHUB_ORG_REPO_PAGE_SIZE` bounds org listing pages, and `GITHUB_SUMMARY_CONTEXT_LINES` / `GITHUB_SUMMARY_PREVIEW_BYTES` keep summaries compact.
+Set `GITHUB_PAT`, `GITHUB_ORG_NAME`, and `GITHUB_ALLOWED_REPOS` to enable the read-only GitHub tools. The allowlist accepts exact `owner/repo` entries and org-wide `owner/*` patterns. `GITHUB_ALLOWED_ORGS` lets you restrict org-level listing. `GITHUB_MAX_FILE_SIZE_BYTES` keeps file fetches bounded, `GITHUB_TREE_MAX_DEPTH` limits repository tree traversal, `GITHUB_ORG_REPO_PAGE_SIZE` bounds org listing pages, and `GITHUB_SUMMARY_CONTEXT_LINES` / `GITHUB_SUMMARY_PREVIEW_BYTES` keep summaries compact.
 
 ## Centralized config behavior
 
@@ -191,10 +191,10 @@ Claude will see these tools through the MCP protocol:
 - `get_indexes`
 - `get_constraints`
 - `list_stored_procedures`
-- `github.get_commit_history`
-- `github.get_file_history`
-- `github.compare_refs`
-- `github.get_pull_request_comments`
+- `github_get_commit_history`
+- `github_get_file_history`
+- `github_compare_refs`
+- `github_get_pull_request_comments`
 
 The endpoint also keeps the previous custom JSON body format for backwards compatibility.
 

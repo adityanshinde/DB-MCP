@@ -4,7 +4,10 @@ import {
   recordGitHubExcessiveRepoScan,
   recordGitHubRepoResolutionAttempt
 } from '@/lib/tools/github/githubClient';
-import { ensureAllowedGitHubRepository, normalizeGitHubRepository } from '@/lib/validators/githubValidator';
+import {
+  ensureAllowedGitHubRepository,
+  normalizeGitHubRepository
+} from '@/lib/validators/githubValidator';
 
 export type GitHubRepositoryResolution = {
   org: string;
@@ -24,6 +27,10 @@ function normalizeOrgName(org?: string): string {
 function getAllowedReposForOrg(org: string): string[] {
   const normalizedOrg = org.toLowerCase();
   return CONFIG.github.allowedRepos.filter((repo) => repo.toLowerCase().startsWith(`${normalizedOrg}/`));
+}
+
+function getExactAllowedReposForOrg(org: string): string[] {
+  return getAllowedReposForOrg(org).filter((repo) => !repo.trim().endsWith('/*'));
 }
 
 export function getAllowedOrgList(): string[] {
@@ -75,7 +82,7 @@ export function resolveGitHubRepositoryContext(input: { org?: string; repo?: str
 
   const org = normalizeOrgName(input.org);
 
-  const allowedRepos = getAllowedReposForOrg(org);
+  const allowedRepos = getExactAllowedReposForOrg(org);
   if (allowedRepos.length === 1) {
     recordGitHubRepoResolutionAttempt('success');
     return {

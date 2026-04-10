@@ -4,17 +4,17 @@ export type ToolName =
   | 'list_schemas'
   | 'get_database_info'
   | 'run_query'
-  | 'db.execute_read_query'
-  | 'github.list_org_repos'
-  | 'github.get_repo_tree'
-  | 'github.get_file_content'
-  | 'github.search_code'
-  | 'github.file_summary'
-  | 'github.module_summary'
-  | 'github.get_commit_history'
-  | 'github.get_file_history'
-  | 'github.compare_refs'
-  | 'github.get_pull_request_comments'
+  | 'db_execute_read_query'
+  | 'github_list_org_repos'
+  | 'github_get_repo_tree'
+  | 'github_get_file_content'
+  | 'github_search_code'
+  | 'github_file_summary'
+  | 'github_module_summary'
+  | 'github_get_commit_history'
+  | 'github_get_file_history'
+  | 'github_compare_refs'
+  | 'github_get_pull_request_comments'
   | 'list_tables'
   | 'search_tables'
   | 'search_columns'
@@ -345,17 +345,17 @@ export type ToolInputMap = {
   list_schemas: ListSchemasInput;
   get_database_info: GetDatabaseInfoInput;
   run_query: RunQueryInput;
-  'db.execute_read_query': ExecuteReadQueryInput;
-  'github.list_org_repos': GitHubListOrgReposInput;
-  'github.get_repo_tree': GitHubRepoTreeInput;
-  'github.get_file_content': GitHubFileContentInput;
-  'github.search_code': GitHubSearchCodeInput;
-  'github.file_summary': GitHubFileSummaryInput;
-  'github.module_summary': GitHubModuleSummaryInput;
-  'github.get_commit_history': GitHubCommitHistoryInput;
-  'github.get_file_history': GitHubFileHistoryInput;
-  'github.compare_refs': GitHubCompareRefsInput;
-  'github.get_pull_request_comments': GitHubPullRequestCommentsInput;
+  'db_execute_read_query': ExecuteReadQueryInput;
+  'github_list_org_repos': GitHubListOrgReposInput;
+  'github_get_repo_tree': GitHubRepoTreeInput;
+  'github_get_file_content': GitHubFileContentInput;
+  'github_search_code': GitHubSearchCodeInput;
+  'github_file_summary': GitHubFileSummaryInput;
+  'github_module_summary': GitHubModuleSummaryInput;
+  'github_get_commit_history': GitHubCommitHistoryInput;
+  'github_get_file_history': GitHubFileHistoryInput;
+  'github_compare_refs': GitHubCompareRefsInput;
+  'github_get_pull_request_comments': GitHubPullRequestCommentsInput;
   list_tables: ListTablesInput;
   search_tables: SearchTablesInput;
   search_columns: SearchColumnsInput;
