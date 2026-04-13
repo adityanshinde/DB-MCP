@@ -195,6 +195,17 @@ Claude will see these tools through the MCP protocol:
 - `github_get_file_history`
 - `github_compare_refs`
 - `github_get_pull_request_comments`
+- `github_get_function_body`
+- `github_grep_file`
+- `github_search_files`
+- `github_search_symbols`
+- `github_find_references`
+- `github_get_method_definition`
+- `github_get_class_definition`
+- `github_get_interface_implementations`
+- `github_get_method_callers`
+- `github_get_method_callees`
+- `github_read_lines`
 
 The endpoint also keeps the previous custom JSON body format for backwards compatibility.
 

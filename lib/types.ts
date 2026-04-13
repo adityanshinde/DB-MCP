@@ -8,6 +8,17 @@ export type ToolName =
   | 'github_list_org_repos'
   | 'github_get_repo_tree'
   | 'github_get_file_content'
+  | 'github_get_function_body'
+  | 'github_grep_file'
+  | 'github_search_files'
+  | 'github_search_symbols'
+  | 'github_find_references'
+  | 'github_get_method_definition'
+  | 'github_get_class_definition'
+  | 'github_get_interface_implementations'
+  | 'github_get_method_callers'
+  | 'github_get_method_callees'
+  | 'github_read_lines'
   | 'github_search_code'
   | 'github_file_summary'
   | 'github_module_summary'
@@ -75,6 +86,65 @@ export type GitHubFileContentInput = {
   repo: string;
   path: string;
   branch?: string;
+};
+
+export type GitHubFunctionBodyInput = {
+  org?: string;
+  repo: string;
+  path: string;
+  branch?: string;
+  function_name: string;
+  max_matches?: number;
+};
+
+export type GitHubGrepFileInput = {
+  org?: string;
+  repo: string;
+  path: string;
+  branch?: string;
+  query: string;
+  regex?: boolean;
+  case_sensitive?: boolean;
+  context_lines?: number;
+  max_matches?: number;
+};
+
+export type GitHubSearchFilesInput = {
+  org?: string;
+  repo: string;
+  branch?: string;
+  query: string;
+  path?: string;
+  glob?: string;
+  limit?: number;
+};
+
+export type GitHubSearchSymbolsInput = {
+  org?: string;
+  repo: string;
+  branch?: string;
+  symbol: string;
+  kind?: 'class' | 'interface' | 'method' | 'property' | 'field' | 'namespace';
+  limit?: number;
+};
+
+export type GitHubMemberDefinitionInput = {
+  org?: string;
+  repo: string;
+  branch?: string;
+  path?: string;
+  class_name?: string;
+  name: string;
+  limit?: number;
+};
+
+export type GitHubReadLinesInput = {
+  org?: string;
+  repo: string;
+  branch?: string;
+  path: string;
+  start: number;
+  end: number;
 };
 
 export type GitHubSearchCodeInput = {
@@ -349,6 +419,17 @@ export type ToolInputMap = {
   'github_list_org_repos': GitHubListOrgReposInput;
   'github_get_repo_tree': GitHubRepoTreeInput;
   'github_get_file_content': GitHubFileContentInput;
+  'github_get_function_body': GitHubFunctionBodyInput;
+  'github_grep_file': GitHubGrepFileInput;
+  'github_search_files': GitHubSearchFilesInput;
+  'github_search_symbols': GitHubSearchSymbolsInput;
+  'github_find_references': GitHubSearchSymbolsInput;
+  'github_get_method_definition': GitHubMemberDefinitionInput;
+  'github_get_class_definition': GitHubMemberDefinitionInput;
+  'github_get_interface_implementations': GitHubSearchSymbolsInput;
+  'github_get_method_callers': GitHubMemberDefinitionInput;
+  'github_get_method_callees': GitHubMemberDefinitionInput;
+  'github_read_lines': GitHubReadLinesInput;
   'github_search_code': GitHubSearchCodeInput;
   'github_file_summary': GitHubFileSummaryInput;
   'github_module_summary': GitHubModuleSummaryInput;

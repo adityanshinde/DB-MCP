@@ -28,6 +28,9 @@ import { executeReadQuery } from '@/lib/tools/executeReadQuery';
 import { listOrgRepos } from '@/lib/tools/github/listOrgRepos';
 import { getRepoTree } from '@/lib/tools/github/getRepoTree';
 import { getFileContent } from '@/lib/tools/github/getFileContent';
+import { getFunctionBody } from '@/lib/tools/github/getFunctionBody';
+import { grepFile } from '@/lib/tools/github/grepFile';
+import { searchFiles, searchSymbols, findReferences, getMethodDefinition, getClassDefinition, getInterfaceImplementations, getMethodCallers, getMethodCallees, readLines } from '@/lib/tools/github/csharpTools';
 import { searchCode } from '@/lib/tools/github/searchCode';
 import { fileSummary } from '@/lib/tools/github/fileSummary';
 import { moduleSummary } from '@/lib/tools/github/moduleSummary';
@@ -532,6 +535,245 @@ export function createMcpServer(): McpServer {
       })
     },
     async ({ org, repo, path, branch }) => toTextResult(await getFileContent(repo, path, branch, org))
+  );
+
+  server.registerTool(
+    'github_get_function_body',
+    {
+      title: 'GitHub Get Function Body',
+      description: 'Extract the full body of a named function, method, or function-valued property from a file.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        path: z.string().min(1),
+        branch: z.string().optional(),
+        function_name: z.string().min(1),
+        max_matches: z.number().int().min(1).max(5).default(1)
+      })
+    },
+    async ({ org, repo, path, branch, function_name, max_matches }) =>
+      toTextResult(
+        await getFunctionBody({
+          org,
+          repo,
+          path,
+          branch,
+          function_name,
+          max_matches
+        })
+      )
+  );
+
+  server.registerTool(
+    'github_grep_file',
+    {
+      title: 'GitHub Grep File',
+      description: 'Search a single allowlisted repository file and return matching lines with context.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        path: z.string().min(1),
+        branch: z.string().optional(),
+        query: z.string().min(1),
+        regex: z.boolean().default(false),
+        case_sensitive: z.boolean().default(false),
+        context_lines: z.number().int().min(0).max(10).default(2),
+        max_matches: z.number().int().min(1).max(200).default(50)
+      })
+    },
+    async ({ org, repo, path, branch, query, regex, case_sensitive, context_lines, max_matches }) =>
+      toTextResult(
+        await grepFile({
+          org,
+          repo,
+          path,
+          branch,
+          query,
+          regex,
+          case_sensitive,
+          context_lines,
+          max_matches
+        })
+      )
+  );
+
+  server.registerTool(
+    'github_search_files',
+    {
+      title: 'GitHub Search Files',
+      description: 'Search allowlisted repository file paths for C# workflow navigation.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        query: z.string().min(1),
+        path: z.string().optional(),
+        glob: z.string().optional(),
+        limit: z.number().int().min(1).max(100).default(20)
+      })
+    },
+    async ({ org, repo, branch, query, path, glob, limit }) => toTextResult(await searchFiles({ org, repo, branch, query, path, glob, limit }))
+  );
+
+  server.registerTool(
+    'github_search_symbols',
+    {
+      title: 'GitHub Search Symbols',
+      description: 'Search C# symbol definitions and related code matches in allowlisted repositories.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        symbol: z.string().min(1),
+        kind: z.enum(['class', 'interface', 'method', 'property', 'field', 'namespace']).optional(),
+        limit: z.number().int().min(1).max(100).default(20)
+      })
+    },
+    async ({ org, repo, branch, symbol, kind, limit }) => toTextResult(await searchSymbols({ org, repo, branch, symbol, kind, limit }))
+  );
+
+  server.registerTool(
+    'github_find_references',
+    {
+      title: 'GitHub Find References',
+      description: 'Find reference-like C# code matches for a symbol in an allowlisted repository.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        symbol: z.string().min(1),
+        kind: z.enum(['class', 'interface', 'method', 'property', 'field', 'namespace']).optional(),
+        limit: z.number().int().min(1).max(100).default(20)
+      })
+    },
+    async ({ org, repo, branch, symbol, kind, limit }) => toTextResult(await findReferences({ org, repo, branch, symbol, kind, limit }))
+  );
+
+  server.registerTool(
+    'github_get_method_definition',
+    {
+      title: 'GitHub Get Method Definition',
+      description: 'Extract C# method definitions from an allowlisted repository.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        path: z.string().optional(),
+        class_name: z.string().optional(),
+        name: z.string().min(1),
+        limit: z.number().int().min(1).max(20).default(5)
+      })
+    },
+    async ({ org, repo, branch, path, class_name, name, limit }) => toTextResult(await getMethodDefinition({ org, repo, branch, path, class_name, name, limit }))
+  );
+
+  server.registerTool(
+    'github_get_class_definition',
+    {
+      title: 'GitHub Get Class Definition',
+      description: 'Extract C# class definitions from an allowlisted repository.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        path: z.string().optional(),
+        class_name: z.string().optional(),
+        name: z.string().min(1),
+        limit: z.number().int().min(1).max(20).default(5)
+      })
+    },
+    async ({ org, repo, branch, path, class_name, name, limit }) => toTextResult(await getClassDefinition({ org, repo, branch, path, class_name, name, limit }))
+  );
+
+  server.registerTool(
+    'github_get_interface_implementations',
+    {
+      title: 'GitHub Get Interface Implementations',
+      description: 'Find C# classes that appear to implement a given interface.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        symbol: z.string().min(1),
+        kind: z.enum(['class', 'interface', 'method', 'property', 'field', 'namespace']).optional(),
+        limit: z.number().int().min(1).max(100).default(10)
+      })
+    },
+    async ({ org, repo, branch, symbol, kind, limit }) => toTextResult(await getInterfaceImplementations({ org, repo, branch, symbol, kind, limit }))
+  );
+
+  server.registerTool(
+    'github_get_method_callers',
+    {
+      title: 'GitHub Get Method Callers',
+      description: 'Return call-site style matches for a C# method in an allowlisted repository.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        path: z.string().optional(),
+        class_name: z.string().optional(),
+        name: z.string().min(1),
+        limit: z.number().int().min(1).max(100).default(10)
+      })
+    },
+    async ({ org, repo, branch, path, class_name, name, limit }) => toTextResult(await getMethodCallers({ org, repo, branch, path, class_name, name, limit }))
+  );
+
+  server.registerTool(
+    'github_get_method_callees',
+    {
+      title: 'GitHub Get Method Callees',
+      description: 'List likely method calls found inside a C# method body.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        path: z.string().optional(),
+        class_name: z.string().optional(),
+        name: z.string().min(1),
+        limit: z.number().int().min(1).max(100).default(10)
+      })
+    },
+    async ({ org, repo, branch, path, class_name, name, limit }) => toTextResult(await getMethodCallees({ org, repo, branch, path, class_name, name, limit }))
+  );
+
+  server.registerTool(
+    'github_read_lines',
+    {
+      title: 'GitHub Read Lines',
+      description: 'Read a bounded line range from a repository file.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        path: z.string().min(1),
+        start: z.number().int().min(1),
+        end: z.number().int().min(1)
+      })
+    },
+    async ({ org, repo, branch, path, start, end }) => toTextResult(await readLines({ org, repo, branch, path, start, end }))
   );
 
   server.registerTool(
@@ -1388,6 +1630,116 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         }
 
         const result = await getFileContent(input.repo, input.path, input.branch, input.org);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_get_function_body': {
+        const input = body.input as ToolRequestWithCredentials<'github_get_function_body'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.path || !input?.function_name) {
+          return withCors(jsonError('github_get_function_body requires repo or org, path, and function_name.', 400));
+        }
+
+        const result = await getFunctionBody(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_grep_file': {
+        const input = body.input as ToolRequestWithCredentials<'github_grep_file'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.path || !input?.query) {
+          return withCors(jsonError('github_grep_file requires repo or org, path, and query.', 400));
+        }
+
+        const result = await grepFile(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_search_files': {
+        const input = body.input as ToolRequestWithCredentials<'github_search_files'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.query) {
+          return withCors(jsonError('github_search_files requires repo or org and query.', 400));
+        }
+
+        const result = await searchFiles(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_search_symbols': {
+        const input = body.input as ToolRequestWithCredentials<'github_search_symbols'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.symbol) {
+          return withCors(jsonError('github_search_symbols requires repo or org and symbol.', 400));
+        }
+
+        const result = await searchSymbols(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_find_references': {
+        const input = body.input as ToolRequestWithCredentials<'github_find_references'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.symbol) {
+          return withCors(jsonError('github_find_references requires repo or org and symbol.', 400));
+        }
+
+        const result = await findReferences(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_get_method_definition': {
+        const input = body.input as ToolRequestWithCredentials<'github_get_method_definition'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.name) {
+          return withCors(jsonError('github_get_method_definition requires repo or org and name.', 400));
+        }
+
+        const result = await getMethodDefinition(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_get_class_definition': {
+        const input = body.input as ToolRequestWithCredentials<'github_get_class_definition'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.name) {
+          return withCors(jsonError('github_get_class_definition requires repo or org and name.', 400));
+        }
+
+        const result = await getClassDefinition(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_get_interface_implementations': {
+        const input = body.input as ToolRequestWithCredentials<'github_get_interface_implementations'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.symbol) {
+          return withCors(jsonError('github_get_interface_implementations requires repo or org and symbol.', 400));
+        }
+
+        const result = await getInterfaceImplementations(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_get_method_callers': {
+        const input = body.input as ToolRequestWithCredentials<'github_get_method_callers'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.name) {
+          return withCors(jsonError('github_get_method_callers requires repo or org and name.', 400));
+        }
+
+        const result = await getMethodCallers(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_get_method_callees': {
+        const input = body.input as ToolRequestWithCredentials<'github_get_method_callees'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.name) {
+          return withCors(jsonError('github_get_method_callees requires repo or org and name.', 400));
+        }
+
+        const result = await getMethodCallees(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_read_lines': {
+        const input = body.input as ToolRequestWithCredentials<'github_read_lines'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.path) {
+          return withCors(jsonError('github_read_lines requires repo or org and path.', 400));
+        }
+
+        const result = await readLines(input);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
