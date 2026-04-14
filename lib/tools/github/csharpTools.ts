@@ -6,7 +6,7 @@ import { getFileContent } from '@/lib/tools/github/getFileContent';
 import { resolveGitHubRepositoryContext } from '@/lib/tools/github/repoResolver';
 import { logMcpError, logMcpEvent } from '@/lib/runtime/observability';
 import { clampGitHubLimit, normalizeGitHubBranch, normalizeGitHubPath } from '@/lib/validators/githubValidator';
-import type { GitHubDependencyPathInput, GitHubMigrationStatusInput, GitHubProjectReferencesInput, GitHubTraceCallChainInput, ToolResponse } from '@/lib/types';
+import type { GitHubDependencyPathInput, GitHubProjectReferencesInput, GitHubTraceCallChainInput, ToolResponse } from '@/lib/types';
 
 type GitHubRepoInput = {
   org?: string;
@@ -1092,40 +1092,6 @@ type DependencyPathResult = {
   project_count: number;
 };
 
-type UsageMatch = {
-  term: string;
-  path: string;
-  name: string;
-  repository: string;
-  url: string;
-  score: number;
-  snippets: string[];
-};
-
-type UsageResult = {
-  repo: string;
-  branch: string;
-  query_terms: string[];
-  total_count: number;
-  returned_count: number;
-  truncated: boolean;
-  matches: UsageMatch[];
-};
-
-type MigrationStatusResult = {
-  repo: string;
-  branch: string;
-  status: 'unknown' | 'mssql_only' | 'postgres_only' | 'mixed' | 'migrating_to_postgres';
-  mssql_signals: number;
-  postgres_signals: number;
-  project_count: number;
-  evidence: {
-    mssql: UsageResult;
-    postgres: UsageResult;
-    projects: ProjectCatalogEntry[];
-  };
-};
-
 type TraceCallChainNode = {
   symbol: string;
   path: string;
@@ -1362,85 +1328,6 @@ function findShortestPath(projects: ProjectCatalogEntry[], edges: ProjectGraphEd
   return [];
 }
 
-function mergeUsageResults(results: Array<{ term: string; data: SearchSymbolsResult }>, limit: number): UsageResult {
-  const matches: UsageMatch[] = [];
-  const seen = new Set<string>();
-
-  for (const result of results) {
-    for (const item of result.data.results) {
-      const key = `${item.path}|${item.url}`.toLowerCase();
-      if (seen.has(key)) {
-        continue;
-      }
-
-      seen.add(key);
-      matches.push({
-        term: result.term,
-        path: item.path,
-        name: item.name,
-        repository: item.repository,
-        url: item.url,
-        score: item.score,
-        snippets: item.snippets
-      });
-
-      if (matches.length >= limit) {
-        break;
-      }
-    }
-
-    if (matches.length >= limit) {
-      break;
-    }
-  }
-
-  return {
-    repo: results[0]?.data.repo || '',
-    branch: results[0]?.data.branch || '',
-    query_terms: results.map((item) => item.term),
-    total_count: matches.length,
-    returned_count: matches.length,
-    truncated: results.some((item) => item.data.limited) || false,
-    matches
-  };
-}
-
-async function searchUsageTerms(input: GitHubRepoInput, terms: string[], limit = 20): Promise<UsageResult> {
-  const repo = resolveGitHubRepositoryContext({ org: input.org, repo: input.repo });
-  const repoContext = await getGitHubRepositoryContext(repo.fullName, input.branch);
-  const searches: Array<{ term: string; data: SearchSymbolsResult }> = [];
-
-  for (const term of terms) {
-    const result = await searchGitHubCode(repoContext, term, {
-      limit,
-      language: 'C#'
-    });
-    searches.push({ term, data: result });
-  }
-
-  return mergeUsageResults(searches, limit);
-}
-
-function detectMigrationStatus(mssqlSignals: number, postgresSignals: number): MigrationStatusResult['status'] {
-  if (mssqlSignals === 0 && postgresSignals === 0) {
-    return 'unknown';
-  }
-
-  if (postgresSignals > 0 && mssqlSignals === 0) {
-    return 'postgres_only';
-  }
-
-  if (mssqlSignals > 0 && postgresSignals === 0) {
-    return 'mssql_only';
-  }
-
-  if (postgresSignals > mssqlSignals) {
-    return 'migrating_to_postgres';
-  }
-
-  return 'mixed';
-}
-
 function extractCallNames(text: string): string[] {
   const blocked = new Set(['if', 'for', 'foreach', 'while', 'switch', 'catch', 'using', 'return', 'new', 'nameof', 'typeof', 'sizeof', 'lock', 'throw', 'await', 'checked', 'unchecked', 'yield', 'base', 'this']);
   const pattern = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
@@ -1519,91 +1406,6 @@ export async function findDependencyPath(input: GitHubDependencyPathInput): Prom
       success: false,
       data: null,
       error: error instanceof Error ? error.message : 'Failed to find dependency path.'
-    };
-  }
-}
-
-export async function findMssqlUsage(input: GitHubProjectReferencesInput): Promise<ToolResponse<UsageResult>> {
-  logMcpEvent('tool.execute.start', { tool: 'github.find_mssql_usage', repo: input.repo, org: input.org });
-
-  try {
-    const usage = await searchUsageTerms(input, ['SqlConnection', 'SqlCommand', 'System.Data.SqlClient', 'Microsoft.Data.SqlClient', 'TicklinksDBDataContext', 'CommandType.StoredProcedure'], clampGitHubLimit(input.limit, 1, 50, 20));
-    return {
-      success: true,
-      data: usage,
-      error: null
-    };
-  } catch (error) {
-    logMcpError('tool.execute.failed', error, { tool: 'github.find_mssql_usage', repo: input.repo, org: input.org });
-    return {
-      success: false,
-      data: null,
-      error: error instanceof Error ? error.message : 'Failed to find MSSQL usage.'
-    };
-  }
-}
-
-export async function findPostgresUsage(input: GitHubProjectReferencesInput): Promise<ToolResponse<UsageResult>> {
-  logMcpEvent('tool.execute.start', { tool: 'github.find_postgres_usage', repo: input.repo, org: input.org });
-
-  try {
-    const usage = await searchUsageTerms(input, ['NpgsqlConnection', 'NpgsqlCommand', 'NpgsqlDataSource', 'NpgsqlParameter', 'using Npgsql'], clampGitHubLimit(input.limit, 1, 50, 20));
-    return {
-      success: true,
-      data: usage,
-      error: null
-    };
-  } catch (error) {
-    logMcpError('tool.execute.failed', error, { tool: 'github.find_postgres_usage', repo: input.repo, org: input.org });
-    return {
-      success: false,
-      data: null,
-      error: error instanceof Error ? error.message : 'Failed to find PostgreSQL usage.'
-    };
-  }
-}
-
-export async function classifyMigrationStatus(input: GitHubMigrationStatusInput): Promise<ToolResponse<MigrationStatusResult>> {
-  logMcpEvent('tool.execute.start', { tool: 'github.classify_migration_status', repo: input.repo, org: input.org });
-
-  try {
-    const catalog = await loadProjectCatalog(input);
-    const graph = buildProjectGraph(catalog.projects);
-    const mssql = await findMssqlUsage({ org: input.org, repo: input.repo, branch: input.branch, root: input.root, limit: input.limit });
-    const postgres = await findPostgresUsage({ org: input.org, repo: input.repo, branch: input.branch, root: input.root, limit: input.limit });
-
-    if (!mssql.success || !postgres.success || !mssql.data || !postgres.data) {
-      throw new Error(mssql.error || postgres.error || 'Failed to classify migration status.');
-    }
-
-    const projectMssqlSignals = catalog.projects.filter((project) => project.indicators.mssql).length;
-    const projectPostgresSignals = catalog.projects.filter((project) => project.indicators.postgres).length;
-    const mssqlSignals = mssql.data.total_count + projectMssqlSignals;
-    const postgresSignals = postgres.data.total_count + projectPostgresSignals;
-
-    return {
-      success: true,
-      data: {
-        repo: catalog.resolvedRepo.fullName,
-        branch: catalog.resolvedBranch,
-        status: detectMigrationStatus(mssqlSignals, postgresSignals),
-        mssql_signals: mssqlSignals,
-        postgres_signals: postgresSignals,
-        project_count: graph.nodes.length,
-        evidence: {
-          mssql: mssql.data,
-          postgres: postgres.data,
-          projects: catalog.projects
-        }
-      },
-      error: null
-    };
-  } catch (error) {
-    logMcpError('tool.execute.failed', error, { tool: 'github.classify_migration_status', repo: input.repo, org: input.org });
-    return {
-      success: false,
-      data: null,
-      error: error instanceof Error ? error.message : 'Failed to classify migration status.'
     };
   }
 }

@@ -22,9 +22,6 @@ export type ToolName =
   | 'github_get_project_references'
   | 'github_get_dependency_graph'
   | 'github_find_dependency_path'
-  | 'github_classify_migration_status'
-  | 'github_find_mssql_usage'
-  | 'github_find_postgres_usage'
   | 'github_trace_call_chain'
   | 'github_search_code'
   | 'github_file_summary'
@@ -170,14 +167,6 @@ export type GitHubDependencyPathInput = {
   branch?: string;
   from: string;
   to: string;
-  root?: string;
-  limit?: number;
-};
-
-export type GitHubMigrationStatusInput = {
-  org?: string;
-  repo?: string;
-  branch?: string;
   root?: string;
   limit?: number;
 };
@@ -479,9 +468,6 @@ export type ToolInputMap = {
   'github_get_project_references': GitHubProjectReferencesInput;
   'github_get_dependency_graph': GitHubProjectReferencesInput;
   'github_find_dependency_path': GitHubDependencyPathInput;
-  'github_classify_migration_status': GitHubMigrationStatusInput;
-  'github_find_mssql_usage': GitHubProjectReferencesInput;
-  'github_find_postgres_usage': GitHubProjectReferencesInput;
   'github_trace_call_chain': GitHubTraceCallChainInput;
   'github_search_code': GitHubSearchCodeInput;
   'github_file_summary': GitHubFileSummaryInput;

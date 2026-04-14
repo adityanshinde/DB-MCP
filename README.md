@@ -209,9 +209,6 @@ Claude will see these tools through the MCP protocol:
 - `github_get_project_references`
 - `github_get_dependency_graph`
 - `github_find_dependency_path`
-- `github_classify_migration_status`
-- `github_find_mssql_usage`
-- `github_find_postgres_usage`
 - `github_trace_call_chain`
 
 The endpoint also keeps the previous custom JSON body format for backwards compatibility.
