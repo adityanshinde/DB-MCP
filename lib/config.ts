@@ -61,7 +61,7 @@ export const CONFIG = {
     allowedOrgs: parseList(process.env.GITHUB_ALLOWED_ORGS),
     allowedRepos: parseList(process.env.GITHUB_ALLOWED_REPOS),
     maxFileSizeBytes: Math.max(50_000, Number(process.env.GITHUB_MAX_FILE_SIZE_BYTES || '1000000')),
-    treeMaxDepth: Math.max(1, Math.min(5, Number(process.env.GITHUB_TREE_MAX_DEPTH || '3'))),
+    treeMaxDepth: Math.max(1, Math.min(5, Number(process.env.GITHUB_TREE_MAX_DEPTH || '5'))),
     orgRepoPageSize: Math.max(1, Math.min(100, Number(process.env.GITHUB_ORG_REPO_PAGE_SIZE || '30'))),
     repoResolutionMaxScans: Math.max(1, Math.min(10, Number(process.env.GITHUB_REPO_RESOLUTION_MAX_SCANS || '3'))),
     summaryContextLines: Math.max(1, Math.min(10, Number(process.env.GITHUB_SUMMARY_CONTEXT_LINES || '3'))),
