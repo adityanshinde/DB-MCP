@@ -30,7 +30,7 @@ import { getRepoTree } from '@/lib/tools/github/getRepoTree';
 import { getFileContent } from '@/lib/tools/github/getFileContent';
 import { getFunctionBody } from '@/lib/tools/github/getFunctionBody';
 import { grepFile } from '@/lib/tools/github/grepFile';
-import { searchFiles, searchSymbols, findReferences, getMethodDefinition, getClassDefinition, getInterfaceImplementations, getMethodCallers, getMethodCallees, readLines } from '@/lib/tools/github/csharpTools';
+import { searchFiles, searchSymbols, findReferences, getMethodDefinition, getClassDefinition, getInterfaceImplementations, getMethodCallers, getMethodCallees, readLines, getProjectReferences, getDependencyGraph as getGithubDependencyGraph, findDependencyPath, classifyMigrationStatus, findMssqlUsage, findPostgresUsage, traceCallChain } from '@/lib/tools/github/csharpTools';
 import { searchCode } from '@/lib/tools/github/searchCode';
 import { fileSummary } from '@/lib/tools/github/fileSummary';
 import { moduleSummary } from '@/lib/tools/github/moduleSummary';
@@ -590,10 +590,12 @@ export function createMcpServer(): McpServer {
         regex: z.boolean().default(false),
         case_sensitive: z.boolean().default(false),
         context_lines: z.number().int().min(0).max(10).default(2),
-        max_matches: z.number().int().min(1).max(200).default(50)
+        start_line: z.number().int().min(1).optional(),
+        end_line: z.number().int().min(1).optional(),
+        max_matches: z.number().int().min(1).max(500).default(50)
       })
     },
-    async ({ org, repo, path, branch, query, regex, case_sensitive, context_lines, max_matches }) =>
+    async ({ org, repo, path, branch, query, regex, case_sensitive, context_lines, start_line, end_line, max_matches }) =>
       toTextResult(
         await grepFile({
           org,
@@ -604,6 +606,8 @@ export function createMcpServer(): McpServer {
           regex,
           case_sensitive,
           context_lines,
+          start_line,
+          end_line,
           max_matches
         })
       )
@@ -774,6 +778,131 @@ export function createMcpServer(): McpServer {
       })
     },
     async ({ org, repo, branch, path, start, end }) => toTextResult(await readLines({ org, repo, branch, path, start, end }))
+  );
+
+  server.registerTool(
+    'github_get_project_references',
+    {
+      title: 'GitHub Get Project References',
+      description: 'Parse solution and project references across a repository.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        root: z.string().optional(),
+        limit: z.number().int().min(1).max(200).default(50)
+      })
+    },
+    async ({ org, repo, branch, root, limit }) => toTextResult(await getProjectReferences({ org, repo, branch, root, limit }))
+  );
+
+  server.registerTool(
+    'github_get_dependency_graph',
+    {
+      title: 'GitHub Get Dependency Graph',
+      description: 'Return a compact dependency graph from solution and project references.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        root: z.string().optional(),
+        limit: z.number().int().min(1).max(200).default(50)
+      })
+    },
+    async ({ org, repo, branch, root, limit }) => toTextResult(await getGithubDependencyGraph({ org, repo, branch, root, limit }))
+  );
+
+  server.registerTool(
+    'github_find_dependency_path',
+    {
+      title: 'GitHub Find Dependency Path',
+      description: 'Find a shortest dependency path between two projects or assemblies.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        from: z.string().min(1),
+        to: z.string().min(1),
+        root: z.string().optional(),
+        limit: z.number().int().min(1).max(200).default(50)
+      })
+    },
+    async ({ org, repo, branch, from, to, root, limit }) => toTextResult(await findDependencyPath({ org, repo, branch, from, to, root, limit }))
+  );
+
+  server.registerTool(
+    'github_classify_migration_status',
+    {
+      title: 'GitHub Classify Migration Status',
+      description: 'Classify repository files and projects as MSSQL-only, Postgres-only, mixed, or neutral.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        root: z.string().optional(),
+        limit: z.number().int().min(1).max(200).default(50)
+      })
+    },
+    async ({ org, repo, branch, root, limit }) => toTextResult(await classifyMigrationStatus({ org, repo, branch, root, limit }))
+  );
+
+  server.registerTool(
+    'github_find_mssql_usage',
+    {
+      title: 'GitHub Find MSSQL Usage',
+      description: 'Search for MSSQL-specific usage across repository files.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        root: z.string().optional(),
+        limit: z.number().int().min(1).max(200).default(50)
+      })
+    },
+    async ({ org, repo, branch, root, limit }) => toTextResult(await findMssqlUsage({ org, repo, branch, root, limit }))
+  );
+
+  server.registerTool(
+    'github_find_postgres_usage',
+    {
+      title: 'GitHub Find Postgres Usage',
+      description: 'Search for PostgreSQL-specific usage across repository files.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        root: z.string().optional(),
+        limit: z.number().int().min(1).max(200).default(50)
+      })
+    },
+    async ({ org, repo, branch, root, limit }) => toTextResult(await findPostgresUsage({ org, repo, branch, root, limit }))
+  );
+
+  server.registerTool(
+    'github_trace_call_chain',
+    {
+      title: 'GitHub Trace Call Chain',
+      description: 'Trace a likely call chain starting from a named C# symbol.',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      inputSchema: z.object({
+        org: z.string().optional(),
+        repo: z.string().optional(),
+        branch: z.string().optional(),
+        entry_symbol: z.string().min(1),
+        path: z.string().optional(),
+        class_name: z.string().optional(),
+        depth: z.number().int().min(1).max(8).default(3),
+        limit: z.number().int().min(1).max(200).default(50)
+      })
+    },
+    async ({ org, repo, branch, entry_symbol, path, class_name, depth, limit }) =>
+      toTextResult(await traceCallChain({ org, repo, branch, entry_symbol, path, class_name, depth, limit }))
   );
 
   server.registerTool(
@@ -1740,6 +1869,67 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         }
 
         const result = await readLines(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_get_project_references':
+      case 'github_get_dependency_graph': {
+        const input = body.input as ToolRequestWithCredentials<'github_get_project_references'>['input'];
+        if ((!input?.repo && !input?.org)) {
+          return withCors(jsonError('github_get_project_references requires repo or org.', 400));
+        }
+
+        const result = await getProjectReferences(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_find_dependency_path': {
+        const input = body.input as ToolRequestWithCredentials<'github_find_dependency_path'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.from || !input?.to) {
+          return withCors(jsonError('github_find_dependency_path requires repo or org, from, and to.', 400));
+        }
+
+        const result = await findDependencyPath(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_classify_migration_status': {
+        const input = body.input as ToolRequestWithCredentials<'github_classify_migration_status'>['input'];
+        if ((!input?.repo && !input?.org)) {
+          return withCors(jsonError('github_classify_migration_status requires repo or org.', 400));
+        }
+
+        const result = await classifyMigrationStatus(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_find_mssql_usage': {
+        const input = body.input as ToolRequestWithCredentials<'github_find_mssql_usage'>['input'];
+        if ((!input?.repo && !input?.org)) {
+          return withCors(jsonError('github_find_mssql_usage requires repo or org.', 400));
+        }
+
+        const result = await findMssqlUsage(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_find_postgres_usage': {
+        const input = body.input as ToolRequestWithCredentials<'github_find_postgres_usage'>['input'];
+        if ((!input?.repo && !input?.org)) {
+          return withCors(jsonError('github_find_postgres_usage requires repo or org.', 400));
+        }
+
+        const result = await findPostgresUsage(input);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'github_trace_call_chain': {
+        const input = body.input as ToolRequestWithCredentials<'github_trace_call_chain'>['input'];
+        if ((!input?.repo && !input?.org) || !input?.entry_symbol) {
+          return withCors(jsonError('github_trace_call_chain requires repo or org and entry_symbol.', 400));
+        }
+
+        const result = await traceCallChain(input);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 

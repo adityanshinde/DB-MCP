@@ -1,11 +1,12 @@
 import { CONFIG } from '@/lib/config';
+import { posix as pathPosix } from 'node:path';
 import { getGitHubContent, getGitHubRepositoryContext, searchGitHubCode, type GitHubRepoContext } from '@/lib/tools/github/githubClient';
 import { getRepoTree } from '@/lib/tools/github/getRepoTree';
 import { getFileContent } from '@/lib/tools/github/getFileContent';
 import { resolveGitHubRepositoryContext } from '@/lib/tools/github/repoResolver';
 import { logMcpError, logMcpEvent } from '@/lib/runtime/observability';
 import { clampGitHubLimit, normalizeGitHubBranch, normalizeGitHubPath } from '@/lib/validators/githubValidator';
-import type { ToolResponse } from '@/lib/types';
+import type { GitHubDependencyPathInput, GitHubMigrationStatusInput, GitHubProjectReferencesInput, GitHubTraceCallChainInput, ToolResponse } from '@/lib/types';
 
 type GitHubRepoInput = {
   org?: string;
@@ -1047,6 +1048,650 @@ export async function readLines(input: ReadLinesInput): Promise<ToolResponse<Rea
       success: false,
       data: null,
       error: error instanceof Error ? error.message : 'Failed to read lines.'
+    };
+  }
+}
+
+type ProjectCatalogEntry = {
+  path: string;
+  name: string;
+  kind: 'solution' | 'project';
+  project_references: string[];
+  package_references: string[];
+  target_frameworks: string[];
+  indicators: {
+    mssql: boolean;
+    postgres: boolean;
+    data_context: boolean;
+  };
+};
+
+type ProjectGraphEdge = {
+  from: string;
+  to: string;
+};
+
+type ProjectGraphResult = {
+  repo: string;
+  branch: string;
+  root: string | null;
+  project_count: number;
+  edge_count: number;
+  nodes: ProjectCatalogEntry[];
+  edges: ProjectGraphEdge[];
+};
+
+type DependencyPathResult = {
+  repo: string;
+  branch: string;
+  from: string;
+  to: string;
+  found: boolean;
+  path: string[];
+  edges: ProjectGraphEdge[];
+  project_count: number;
+};
+
+type UsageMatch = {
+  term: string;
+  path: string;
+  name: string;
+  repository: string;
+  url: string;
+  score: number;
+  snippets: string[];
+};
+
+type UsageResult = {
+  repo: string;
+  branch: string;
+  query_terms: string[];
+  total_count: number;
+  returned_count: number;
+  truncated: boolean;
+  matches: UsageMatch[];
+};
+
+type MigrationStatusResult = {
+  repo: string;
+  branch: string;
+  status: 'unknown' | 'mssql_only' | 'postgres_only' | 'mixed' | 'migrating_to_postgres';
+  mssql_signals: number;
+  postgres_signals: number;
+  project_count: number;
+  evidence: {
+    mssql: UsageResult;
+    postgres: UsageResult;
+    projects: ProjectCatalogEntry[];
+  };
+};
+
+type TraceCallChainNode = {
+  symbol: string;
+  path: string;
+  class_name?: string;
+  depth: number;
+  start_line: number;
+  end_line: number;
+  calls: string[];
+  definition: string;
+};
+
+type TraceCallChainResult = {
+  repo: string;
+  branch: string;
+  entry_symbol: string;
+  depth_limit: number;
+  node_limit: number;
+  truncated: boolean;
+  nodes: TraceCallChainNode[];
+  edges: ProjectGraphEdge[];
+};
+
+function normalizeRepoPath(basePath: string, relativePath: string): string {
+  const normalized = relativePath.trim().replace(/\\/g, '/');
+  if (!normalized) {
+    return normalizeGitHubPath(basePath);
+  }
+
+  if (normalized.startsWith('/')) {
+    return normalizeGitHubPath(normalized);
+  }
+
+  const baseDirectory = pathPosix.dirname(normalizeGitHubPath(basePath));
+  return normalizeGitHubPath(pathPosix.normalize(pathPosix.join(baseDirectory, normalized)));
+}
+
+function parseRepeatedMatches(content: string, pattern: RegExp): string[] {
+  const values: string[] = [];
+  let match: RegExpExecArray | null;
+  pattern.lastIndex = 0;
+
+  while ((match = pattern.exec(content)) !== null) {
+    if (match[1]) {
+      values.push(match[1].trim());
+    }
+  }
+
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function parseTargetFrameworks(content: string): string[] {
+  const frameworks = new Set<string>();
+  const single = /<TargetFramework>([^<]+)<\/TargetFramework>/i.exec(content);
+  const multi = /<TargetFrameworks>([^<]+)<\/TargetFrameworks>/i.exec(content);
+
+  for (const value of [single?.[1], multi?.[1]]) {
+    if (!value) {
+      continue;
+    }
+
+    value.split(';').map((item) => item.trim()).filter(Boolean).forEach((item) => frameworks.add(item));
+  }
+
+  return Array.from(frameworks);
+}
+
+function parseProjectIndicators(content: string, packageReferences: string[]): { mssql: boolean; postgres: boolean; data_context: boolean } {
+  const lowerContent = content.toLowerCase();
+  const lowerPackages = packageReferences.map((item) => item.toLowerCase());
+
+  return {
+    mssql:
+      /sqlconnection|sqlcommand|system\.data\.sqlclient|microsoft\.data\.sqlclient|ticklinksdbdatacontext|commandtype\.storedprocedure/.test(lowerContent) ||
+      lowerPackages.some((item) => item.includes('sqlclient') || item.includes('entityframework.sqlserver')),
+    postgres:
+      /npgsqlconnection|npgsqlcommand|npgsqldatasource|npgsqlparameter|using\s+npgsql/.test(lowerContent) ||
+      lowerPackages.some((item) => item.includes('npgsql') || item.includes('entityframeworkcore.postgresql')),
+    data_context: /ticklinksdbdatacontext|datacontext/i.test(content)
+  };
+}
+
+function parseSolutionProjects(content: string, solutionPath: string): Array<{ name: string; path: string }> {
+  const pattern = /^Project\("\{[^\"]+\}"\)\s*=\s*"([^"]+)",\s*"([^"]+)",\s*"\{[^\"]+\}"/gmi;
+  const projects: Array<{ name: string; path: string }> = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(content)) !== null) {
+    const name = match[1]?.trim();
+    const includePath = match[2]?.trim();
+    if (name && includePath) {
+      projects.push({
+        name,
+        path: normalizeRepoPath(solutionPath, includePath)
+      });
+    }
+  }
+
+  return projects;
+}
+
+function parseCsproj(content: string, path: string): Pick<ProjectCatalogEntry, 'project_references' | 'package_references' | 'target_frameworks' | 'indicators'> {
+  const projectReferences = parseRepeatedMatches(content, /<ProjectReference[^>]*Include="([^"]+)"[^>]*>/gi).map((item) => normalizeRepoPath(path, item));
+  const packageReferences = parseRepeatedMatches(content, /<PackageReference[^>]*Include="([^"]+)"[^>]*>/gi);
+  return {
+    project_references: projectReferences,
+    package_references: packageReferences,
+    target_frameworks: parseTargetFrameworks(content),
+    indicators: parseProjectIndicators(content, packageReferences)
+  };
+}
+
+function resolveProjectIdentifier(identifier: string, projects: ProjectCatalogEntry[]): ProjectCatalogEntry | null {
+  const normalized = normalizeGitHubPath(identifier).toLowerCase();
+  const baseName = pathPosix.basename(normalized).replace(/\.(csproj|sln)$/i, '').toLowerCase();
+
+  return (
+    projects.find((project) => project.path.toLowerCase() === normalized) ||
+    projects.find((project) => project.path.toLowerCase().endsWith(`/${normalized}`)) ||
+    projects.find((project) => project.name.toLowerCase() === normalized || project.name.toLowerCase() === baseName) ||
+    null
+  );
+}
+
+async function loadProjectCatalog(input: GitHubRepoInput & { root?: string; limit?: number }): Promise<{ resolvedRepo: { org: string; repo: string; fullName: string }; resolvedBranch: string; projects: ProjectCatalogEntry[] }> {
+  const resolvedRepo = resolveGitHubRepositoryContext({ org: input.org, repo: input.repo });
+  const repoContext = await getGitHubRepositoryContext(resolvedRepo.fullName, input.branch);
+  const resolvedBranch = normalizeGitHubBranch(input.branch) || repoContext.resolvedBranch;
+  const root = input.root ? normalizeGitHubPath(input.root) : undefined;
+  const tree = await getRepoTree(resolvedRepo.repo, root, resolvedBranch, CONFIG.github.treeMaxDepth, resolvedRepo.org);
+
+  if (!tree.success || !tree.data) {
+    throw new Error(tree.error || 'Failed to load project catalog.');
+  }
+
+  const candidateFiles = tree.data.entries.filter((entry) => entry.type === 'file' && (entry.path.toLowerCase().endsWith('.csproj') || entry.path.toLowerCase().endsWith('.sln')));
+  const projects: ProjectCatalogEntry[] = [];
+
+  for (const candidate of candidateFiles) {
+    const file = await getFileContent(resolvedRepo.repo, candidate.path, resolvedBranch, resolvedRepo.org);
+    if (!file.success || !file.data) {
+      continue;
+    }
+
+    const content = file.data.content;
+    const name = pathPosix.basename(candidate.path).replace(/\.(csproj|sln)$/i, '');
+
+    if (candidate.path.toLowerCase().endsWith('.sln')) {
+      const projectReferences = parseSolutionProjects(content, candidate.path).map((item) => item.path);
+      projects.push({
+        path: candidate.path,
+        name,
+        kind: 'solution',
+        project_references: projectReferences,
+        package_references: [],
+        target_frameworks: [],
+        indicators: parseProjectIndicators(content, [])
+      });
+      continue;
+    }
+
+    const parsed = parseCsproj(content, candidate.path);
+    projects.push({
+      path: candidate.path,
+      name,
+      kind: 'project',
+      ...parsed
+    });
+  }
+
+  return {
+    resolvedRepo,
+    resolvedBranch,
+    projects
+  };
+}
+
+function buildProjectGraph(projects: ProjectCatalogEntry[]): { nodes: ProjectCatalogEntry[]; edges: ProjectGraphEdge[] } {
+  const projectMap = new Map(projects.map((project) => [project.path.toLowerCase(), project]));
+  const edges: ProjectGraphEdge[] = [];
+
+  for (const project of projects) {
+    for (const reference of project.project_references) {
+      const resolved = projectMap.get(reference.toLowerCase()) ?? projects.find((candidate) => candidate.path.toLowerCase().endsWith(`/${reference.toLowerCase()}`));
+      if (resolved) {
+        edges.push({ from: project.path, to: resolved.path });
+      }
+    }
+  }
+
+  return {
+    nodes: projects,
+    edges
+  };
+}
+
+function findShortestPath(projects: ProjectCatalogEntry[], edges: ProjectGraphEdge[], from: string, to: string): string[] {
+  const start = resolveProjectIdentifier(from, projects);
+  const target = resolveProjectIdentifier(to, projects);
+  if (!start || !target) {
+    return [];
+  }
+
+  const adjacency = new Map<string, string[]>();
+  for (const edge of edges) {
+    const current = adjacency.get(edge.from) || [];
+    current.push(edge.to);
+    adjacency.set(edge.from, current);
+  }
+
+  const queue: Array<{ path: string[]; node: string }> = [{ path: [start.path], node: start.path }];
+  const visited = new Set<string>([start.path.toLowerCase()]);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      continue;
+    }
+
+    if (current.node.toLowerCase() === target.path.toLowerCase()) {
+      return current.path;
+    }
+
+    for (const next of adjacency.get(current.node) || []) {
+      const key = next.toLowerCase();
+      if (visited.has(key)) {
+        continue;
+      }
+
+      visited.add(key);
+      queue.push({ path: [...current.path, next], node: next });
+    }
+  }
+
+  return [];
+}
+
+function mergeUsageResults(results: Array<{ term: string; data: SearchSymbolsResult }>, limit: number): UsageResult {
+  const matches: UsageMatch[] = [];
+  const seen = new Set<string>();
+
+  for (const result of results) {
+    for (const item of result.data.results) {
+      const key = `${item.path}|${item.url}`.toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      matches.push({
+        term: result.term,
+        path: item.path,
+        name: item.name,
+        repository: item.repository,
+        url: item.url,
+        score: item.score,
+        snippets: item.snippets
+      });
+
+      if (matches.length >= limit) {
+        break;
+      }
+    }
+
+    if (matches.length >= limit) {
+      break;
+    }
+  }
+
+  return {
+    repo: results[0]?.data.repo || '',
+    branch: results[0]?.data.branch || '',
+    query_terms: results.map((item) => item.term),
+    total_count: matches.length,
+    returned_count: matches.length,
+    truncated: results.some((item) => item.data.limited) || false,
+    matches
+  };
+}
+
+async function searchUsageTerms(input: GitHubRepoInput, terms: string[], limit = 20): Promise<UsageResult> {
+  const repo = resolveGitHubRepositoryContext({ org: input.org, repo: input.repo });
+  const repoContext = await getGitHubRepositoryContext(repo.fullName, input.branch);
+  const searches: Array<{ term: string; data: SearchSymbolsResult }> = [];
+
+  for (const term of terms) {
+    const result = await searchGitHubCode(repoContext, term, {
+      limit,
+      language: 'C#'
+    });
+    searches.push({ term, data: result });
+  }
+
+  return mergeUsageResults(searches, limit);
+}
+
+function detectMigrationStatus(mssqlSignals: number, postgresSignals: number): MigrationStatusResult['status'] {
+  if (mssqlSignals === 0 && postgresSignals === 0) {
+    return 'unknown';
+  }
+
+  if (postgresSignals > 0 && mssqlSignals === 0) {
+    return 'postgres_only';
+  }
+
+  if (mssqlSignals > 0 && postgresSignals === 0) {
+    return 'mssql_only';
+  }
+
+  if (postgresSignals > mssqlSignals) {
+    return 'migrating_to_postgres';
+  }
+
+  return 'mixed';
+}
+
+function extractCallNames(text: string): string[] {
+  const blocked = new Set(['if', 'for', 'foreach', 'while', 'switch', 'catch', 'using', 'return', 'new', 'nameof', 'typeof', 'sizeof', 'lock', 'throw', 'await', 'checked', 'unchecked', 'yield', 'base', 'this']);
+  const pattern = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
+  const names = new Set<string>();
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    const name = match[1];
+    if (!blocked.has(name.toLowerCase())) {
+      names.add(name);
+    }
+  }
+
+  return Array.from(names);
+}
+
+export async function getProjectReferences(input: GitHubProjectReferencesInput): Promise<ToolResponse<ProjectGraphResult>> {
+  logMcpEvent('tool.execute.start', { tool: 'github.get_project_references', repo: input.repo, org: input.org });
+
+  try {
+    const catalog = await loadProjectCatalog(input);
+    const graph = buildProjectGraph(catalog.projects);
+
+    return {
+      success: true,
+      data: {
+        repo: catalog.resolvedRepo.fullName,
+        branch: catalog.resolvedBranch,
+        root: input.root ? normalizeGitHubPath(input.root) : null,
+        project_count: graph.nodes.length,
+        edge_count: graph.edges.length,
+        nodes: graph.nodes,
+        edges: graph.edges
+      },
+      error: null
+    };
+  } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'github.get_project_references', repo: input.repo, org: input.org });
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to get project references.'
+    };
+  }
+}
+
+export async function getDependencyGraph(input: GitHubProjectReferencesInput): Promise<ToolResponse<ProjectGraphResult>> {
+  return getProjectReferences(input);
+}
+
+export async function findDependencyPath(input: GitHubDependencyPathInput): Promise<ToolResponse<DependencyPathResult>> {
+  logMcpEvent('tool.execute.start', { tool: 'github.find_dependency_path', repo: input.repo, org: input.org });
+
+  try {
+    const catalog = await loadProjectCatalog(input);
+    const graph = buildProjectGraph(catalog.projects);
+    const path = findShortestPath(graph.nodes, graph.edges, input.from, input.to);
+
+    return {
+      success: true,
+      data: {
+        repo: catalog.resolvedRepo.fullName,
+        branch: catalog.resolvedBranch,
+        from: input.from,
+        to: input.to,
+        found: path.length > 0,
+        path,
+        edges: graph.edges,
+        project_count: graph.nodes.length
+      },
+      error: null
+    };
+  } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'github.find_dependency_path', repo: input.repo, org: input.org });
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to find dependency path.'
+    };
+  }
+}
+
+export async function findMssqlUsage(input: GitHubProjectReferencesInput): Promise<ToolResponse<UsageResult>> {
+  logMcpEvent('tool.execute.start', { tool: 'github.find_mssql_usage', repo: input.repo, org: input.org });
+
+  try {
+    const usage = await searchUsageTerms(input, ['SqlConnection', 'SqlCommand', 'System.Data.SqlClient', 'Microsoft.Data.SqlClient', 'TicklinksDBDataContext', 'CommandType.StoredProcedure'], clampGitHubLimit(input.limit, 1, 50, 20));
+    return {
+      success: true,
+      data: usage,
+      error: null
+    };
+  } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'github.find_mssql_usage', repo: input.repo, org: input.org });
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to find MSSQL usage.'
+    };
+  }
+}
+
+export async function findPostgresUsage(input: GitHubProjectReferencesInput): Promise<ToolResponse<UsageResult>> {
+  logMcpEvent('tool.execute.start', { tool: 'github.find_postgres_usage', repo: input.repo, org: input.org });
+
+  try {
+    const usage = await searchUsageTerms(input, ['NpgsqlConnection', 'NpgsqlCommand', 'NpgsqlDataSource', 'NpgsqlParameter', 'using Npgsql'], clampGitHubLimit(input.limit, 1, 50, 20));
+    return {
+      success: true,
+      data: usage,
+      error: null
+    };
+  } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'github.find_postgres_usage', repo: input.repo, org: input.org });
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to find PostgreSQL usage.'
+    };
+  }
+}
+
+export async function classifyMigrationStatus(input: GitHubMigrationStatusInput): Promise<ToolResponse<MigrationStatusResult>> {
+  logMcpEvent('tool.execute.start', { tool: 'github.classify_migration_status', repo: input.repo, org: input.org });
+
+  try {
+    const catalog = await loadProjectCatalog(input);
+    const graph = buildProjectGraph(catalog.projects);
+    const mssql = await findMssqlUsage({ org: input.org, repo: input.repo, branch: input.branch, root: input.root, limit: input.limit });
+    const postgres = await findPostgresUsage({ org: input.org, repo: input.repo, branch: input.branch, root: input.root, limit: input.limit });
+
+    if (!mssql.success || !postgres.success || !mssql.data || !postgres.data) {
+      throw new Error(mssql.error || postgres.error || 'Failed to classify migration status.');
+    }
+
+    const projectMssqlSignals = catalog.projects.filter((project) => project.indicators.mssql).length;
+    const projectPostgresSignals = catalog.projects.filter((project) => project.indicators.postgres).length;
+    const mssqlSignals = mssql.data.total_count + projectMssqlSignals;
+    const postgresSignals = postgres.data.total_count + projectPostgresSignals;
+
+    return {
+      success: true,
+      data: {
+        repo: catalog.resolvedRepo.fullName,
+        branch: catalog.resolvedBranch,
+        status: detectMigrationStatus(mssqlSignals, postgresSignals),
+        mssql_signals: mssqlSignals,
+        postgres_signals: postgresSignals,
+        project_count: graph.nodes.length,
+        evidence: {
+          mssql: mssql.data,
+          postgres: postgres.data,
+          projects: catalog.projects
+        }
+      },
+      error: null
+    };
+  } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'github.classify_migration_status', repo: input.repo, org: input.org });
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to classify migration status.'
+    };
+  }
+}
+
+export async function traceCallChain(input: GitHubTraceCallChainInput): Promise<ToolResponse<TraceCallChainResult>> {
+  logMcpEvent('tool.execute.start', { tool: 'github.trace_call_chain', repo: input.repo, org: input.org });
+
+  try {
+    const depthLimit = Math.max(1, Math.min(6, input.depth ?? 3));
+    const nodeLimit = clampGitHubLimit(input.limit, 1, 50, 20);
+    const repo = resolveGitHubRepositoryContext({ org: input.org, repo: input.repo });
+    const repoContext = await getGitHubRepositoryContext(repo.fullName, input.branch);
+    const visited = new Set<string>();
+    const nodes: TraceCallChainNode[] = [];
+    const edges: ProjectGraphEdge[] = [];
+
+    async function visit(symbol: string, currentPath: string | undefined, className: string | undefined, depth: number): Promise<void> {
+      if (nodes.length >= nodeLimit || depth > depthLimit) {
+        return;
+      }
+
+      const key = `${symbol}|${currentPath || ''}|${className || ''}`.toLowerCase();
+      if (visited.has(key)) {
+        return;
+      }
+
+      visited.add(key);
+
+      const definition = await getMethodDefinition({
+        org: input.org,
+        repo: input.repo,
+        branch: input.branch,
+        path: currentPath,
+        class_name: className,
+        name: symbol,
+        limit: 1
+      });
+
+      if (!definition.success || !definition.data || definition.data.matches.length === 0) {
+        return;
+      }
+
+      const match = definition.data.matches[0];
+      const callees = extractCallNames(match.definition).slice(0, 10);
+
+      nodes.push({
+        symbol,
+        path: match.path,
+        class_name: match.class_name,
+        depth,
+        start_line: match.start_line,
+        end_line: match.end_line,
+        calls: callees,
+        definition: match.definition
+      });
+
+      for (const callee of callees) {
+        if (nodes.length >= nodeLimit) {
+          break;
+        }
+
+        edges.push({ from: symbol, to: callee });
+        await visit(callee, match.path, match.class_name, depth + 1);
+      }
+    }
+
+    await visit(input.entry_symbol.trim(), input.path, input.class_name, 1);
+
+    return {
+      success: true,
+      data: {
+        repo: repoContext.repo,
+        branch: repoContext.resolvedBranch,
+        entry_symbol: input.entry_symbol.trim(),
+        depth_limit: depthLimit,
+        node_limit: nodeLimit,
+        truncated: nodes.length >= nodeLimit,
+        nodes,
+        edges
+      },
+      error: null
+    };
+  } catch (error) {
+    logMcpError('tool.execute.failed', error, { tool: 'github.trace_call_chain', repo: input.repo, org: input.org });
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to trace call chain.'
     };
   }
 }

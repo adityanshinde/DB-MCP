@@ -63,7 +63,7 @@ GITHUB_PAT=replace_with_github_pat
 GITHUB_ORG_NAME=myorg
 GITHUB_ALLOWED_ORGS=myorg
 GITHUB_ALLOWED_REPOS=owner1/repo1,owner2/repo2,owner3/*
-GITHUB_MAX_FILE_SIZE_BYTES=300000
+GITHUB_MAX_FILE_SIZE_BYTES=1000000
 GITHUB_TREE_MAX_DEPTH=3
 GITHUB_ORG_REPO_PAGE_SIZE=30
 GITHUB_REPO_RESOLUTION_MAX_SCANS=3
@@ -206,6 +206,13 @@ Claude will see these tools through the MCP protocol:
 - `github_get_method_callers`
 - `github_get_method_callees`
 - `github_read_lines`
+- `github_get_project_references`
+- `github_get_dependency_graph`
+- `github_find_dependency_path`
+- `github_classify_migration_status`
+- `github_find_mssql_usage`
+- `github_find_postgres_usage`
+- `github_trace_call_chain`
 
 The endpoint also keeps the previous custom JSON body format for backwards compatibility.
 

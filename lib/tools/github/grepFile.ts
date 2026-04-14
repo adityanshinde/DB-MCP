@@ -13,6 +13,8 @@ type GitHubGrepFileInput = {
   regex?: boolean;
   case_sensitive?: boolean;
   context_lines?: number;
+  start_line?: number;
+  end_line?: number;
   max_matches?: number;
 };
 
@@ -38,7 +40,10 @@ type GrepFileResult = {
   regex: boolean;
   case_sensitive: boolean;
   context_lines: number;
+  scan_start_line: number;
+  scan_end_line: number;
   file_size_bytes: number;
+  warning: string | null;
   total_matching_lines: number;
   returned_matching_lines: number;
   truncated: boolean;
@@ -49,7 +54,8 @@ const MAX_QUERY_LENGTH = 256;
 const DEFAULT_CONTEXT_LINES = 2;
 const DEFAULT_MAX_MATCHES = 50;
 const MAX_CONTEXT_LINES = 10;
-const MAX_MATCHES = 200;
+const MAX_MATCHES = 500;
+const FILE_SIZE_WARNING_BYTES = 200_000;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -127,11 +133,27 @@ async function loadGrepFile(input: GitHubGrepFileInput): Promise<GrepFileResult>
   const maxMatches = Math.max(1, Math.min(MAX_MATCHES, input.max_matches ?? DEFAULT_MAX_MATCHES));
   const matcher = buildMatcher(query, regex, caseSensitive);
   const lines = contentResult.data.content.replace(/\r\n/g, '\n').split('\n');
+  const totalLines = lines.length;
+  const rawStartLine = input.start_line ?? 1;
+  const rawEndLine = input.end_line ?? totalLines;
+
+  if (rawStartLine < 1 || rawEndLine < 1) {
+    throw new Error('start_line and end_line must be positive integers.');
+  }
+
+  if (rawStartLine > rawEndLine) {
+    throw new Error('start_line must be less than or equal to end_line.');
+  }
+
+  const scanStartLine = Math.min(Math.max(1, rawStartLine), totalLines + 1);
+  const scanEndLine = Math.min(Math.max(scanStartLine, rawEndLine), totalLines);
+  const scanStartIndex = Math.min(Math.max(0, scanStartLine - 1), totalLines);
+  const scanEndExclusive = Math.min(Math.max(0, scanEndLine), totalLines);
   const matches: GrepFileMatch[] = [];
   let totalMatches = 0;
   let truncated = false;
 
-  for (let index = 0; index < lines.length; index += 1) {
+  for (let index = scanStartIndex; index < scanEndExclusive; index += 1) {
     if (!matcher.test(lines[index] ?? '')) {
       matcher.lastIndex = 0;
       continue;
@@ -172,6 +194,11 @@ async function loadGrepFile(input: GitHubGrepFileInput): Promise<GrepFileResult>
     total_matching_lines: totalMatches,
     returned_matching_lines: matches.length,
     truncated,
+    scan_start_line: scanStartLine,
+    scan_end_line: scanEndLine,
+    warning: contentResult.data.size > FILE_SIZE_WARNING_BYTES
+      ? `File is ${contentResult.data.size} bytes; chunk scans by line range when possible.`
+      : null,
     matches
   };
 }

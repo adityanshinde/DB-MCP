@@ -19,6 +19,13 @@ export type ToolName =
   | 'github_get_method_callers'
   | 'github_get_method_callees'
   | 'github_read_lines'
+  | 'github_get_project_references'
+  | 'github_get_dependency_graph'
+  | 'github_find_dependency_path'
+  | 'github_classify_migration_status'
+  | 'github_find_mssql_usage'
+  | 'github_find_postgres_usage'
+  | 'github_trace_call_chain'
   | 'github_search_code'
   | 'github_file_summary'
   | 'github_module_summary'
@@ -106,6 +113,8 @@ export type GitHubGrepFileInput = {
   regex?: boolean;
   case_sensitive?: boolean;
   context_lines?: number;
+  start_line?: number;
+  end_line?: number;
   max_matches?: number;
 };
 
@@ -145,6 +154,43 @@ export type GitHubReadLinesInput = {
   path: string;
   start: number;
   end: number;
+};
+
+export type GitHubProjectReferencesInput = {
+  org?: string;
+  repo?: string;
+  branch?: string;
+  root?: string;
+  limit?: number;
+};
+
+export type GitHubDependencyPathInput = {
+  org?: string;
+  repo?: string;
+  branch?: string;
+  from: string;
+  to: string;
+  root?: string;
+  limit?: number;
+};
+
+export type GitHubMigrationStatusInput = {
+  org?: string;
+  repo?: string;
+  branch?: string;
+  root?: string;
+  limit?: number;
+};
+
+export type GitHubTraceCallChainInput = {
+  org?: string;
+  repo?: string;
+  branch?: string;
+  entry_symbol: string;
+  path?: string;
+  class_name?: string;
+  depth?: number;
+  limit?: number;
 };
 
 export type GitHubSearchCodeInput = {
@@ -430,6 +476,13 @@ export type ToolInputMap = {
   'github_get_method_callers': GitHubMemberDefinitionInput;
   'github_get_method_callees': GitHubMemberDefinitionInput;
   'github_read_lines': GitHubReadLinesInput;
+  'github_get_project_references': GitHubProjectReferencesInput;
+  'github_get_dependency_graph': GitHubProjectReferencesInput;
+  'github_find_dependency_path': GitHubDependencyPathInput;
+  'github_classify_migration_status': GitHubMigrationStatusInput;
+  'github_find_mssql_usage': GitHubProjectReferencesInput;
+  'github_find_postgres_usage': GitHubProjectReferencesInput;
+  'github_trace_call_chain': GitHubTraceCallChainInput;
   'github_search_code': GitHubSearchCodeInput;
   'github_file_summary': GitHubFileSummaryInput;
   'github_module_summary': GitHubModuleSummaryInput;
