@@ -156,6 +156,28 @@ function extractRateLimitMessage(response: Response): string {
   return ` Rate limit remaining: ${remaining ?? 'unknown'}. Resets at: ${resetText}.`;
 }
 
+function extractMissingRefMessage(status: number, rawBody: string): string {
+  if (status !== 404) {
+    return '';
+  }
+
+  try {
+    const parsed = JSON.parse(rawBody) as { message?: string };
+    const message = parsed.message?.trim() || '';
+    const match = message.match(/No commit found for the ref\s+(.+)/i);
+    if (!match) {
+      return '';
+    }
+
+    const ref = match[1].replace(/[.\s]+$/, '').trim();
+    return ref
+      ? ` Git ref not found: ${ref}. If this is a local-only branch, push it to GitHub or pass a remote branch name.`
+      : ' Git ref not found. If this is a local-only branch, push it to GitHub or pass a remote branch name.';
+  } catch {
+    return '';
+  }
+}
+
 function formatGitHubError(status: number, rawBody: string, response: Response): string {
   let message = `GitHub API request failed with status ${status}.`;
 
@@ -184,7 +206,7 @@ function formatGitHubError(status: number, rawBody: string, response: Response):
     }
   }
 
-  return `${message}${extractRateLimitMessage(response)}`;
+  return `${message}${extractMissingRefMessage(status, rawBody)}${extractRateLimitMessage(response)}`;
 }
 
 export async function githubRequestJson<T>(
