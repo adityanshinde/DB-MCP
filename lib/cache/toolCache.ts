@@ -32,7 +32,7 @@ type ReadThroughCacheResult<T> = {
 
 const L1_ENABLED = process.env.MCP_CACHE_L1 !== 'false';
 const L1_MAX_ENTRIES = Math.max(1, Number(process.env.MCP_CACHE_L1_MAX_ENTRIES || '256'));
-const MAX_PAYLOAD_BYTES = Math.max(10_000, Number(process.env.MCP_CACHE_MAX_PAYLOAD_BYTES || '500000'));
+const MAX_PAYLOAD_BYTES = Math.max(10_000, Number(process.env.MCP_CACHE_MAX_PAYLOAD_BYTES || '2097152'));
 
 let redisClient: Redis | null | undefined;
 const l1Cache = new Map<string, CacheEnvelope<unknown>>();
