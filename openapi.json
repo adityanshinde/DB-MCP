@@ -1,0 +1,438 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DB MCP API",
+    "version": "1.0.0",
+    "description": "MCP JSON-RPC endpoint exposed over HTTP."
+  },
+  "servers": [
+    {
+      "url": "https://db-mcp-ashen.vercel.app"
+    }
+  ],
+  "paths": {
+    "/api/mcp": {
+      "post": {
+        "operationId": "callMcp",
+        "summary": "Send an MCP JSON-RPC request",
+        "description": "Send a JSON-RPC 2.0 request to the MCP server.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpRequest"
+              },
+              "examples": {
+                "initialize": {
+                  "summary": "Initialize",
+                  "value": {
+                    "jsonrpc": "2.0",
+                    "id": "init-1",
+                    "method": "initialize",
+                    "params": {
+                      "protocolVersion": "2024-11-05",
+                      "capabilities": {},
+                      "clientInfo": {
+                        "name": "OpenAI",
+                        "version": "1.0.0"
+                      }
+                    }
+                  }
+                },
+                "listTools": {
+                  "summary": "List tools",
+                  "value": {
+                    "jsonrpc": "2.0",
+                    "id": "tools-1",
+                    "method": "tools/list",
+                    "params": {}
+                  }
+                },
+                "callTool": {
+                  "summary": "Call tool",
+                  "value": {
+                    "jsonrpc": "2.0",
+                    "id": "call-1",
+                    "method": "tools/call",
+                    "params": {
+                      "name": "query",
+                      "arguments": {
+                        "sql": "SELECT 1"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON-RPC response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "McpRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["jsonrpc", "method", "params"],
+        "properties": {
+          "jsonrpc": {
+            "type": "string",
+            "enum": ["2.0"]
+          },
+          "id": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "method": {
+            "type": "string",
+            "description": "JSON-RPC method name.",
+            "enum": [
+              "initialize",
+              "ping",
+              "tools/list",
+              "tools/call",
+              "resources/list",
+              "resources/read",
+              "prompts/list",
+              "prompts/get",
+              "notifications/initialized"
+            ]
+          },
+          "params": {
+            "type": "object",
+            "description": "Method-specific parameters.",
+            "properties": {
+              "protocolVersion": {
+                "type": "string"
+              },
+              "capabilities": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {}
+              },
+              "clientInfo": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                }
+              },
+              "name": {
+                "type": "string"
+              },
+              "arguments": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {}
+              },
+              "uri": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "McpResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "jsonrpc": {
+            "type": "string",
+            "enum": ["2.0"]
+          },
+          "id": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "protocolVersion": {
+                "type": "string"
+              },
+              "capabilities": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {}
+              },
+              "serverInfo": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                }
+              },
+              "instructions": {
+                "type": "string"
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ToolDefinition"
+                }
+              },
+              "resources": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ResourceDefinition"
+                }
+              },
+              "prompts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PromptDefinition"
+                }
+              },
+              "content": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ContentItem"
+                }
+              },
+              "structuredContent": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {}
+              },
+              "isError": {
+                "type": "boolean"
+              },
+              "contents": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ResourceContent"
+                }
+              }
+            }
+          },
+          "error": {
+            "$ref": "#/components/schemas/JsonRpcError"
+          }
+        }
+      },
+      "McpErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["jsonrpc", "error"],
+        "properties": {
+          "jsonrpc": {
+            "type": "string",
+            "enum": ["2.0"]
+          },
+          "id": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "$ref": "#/components/schemas/JsonRpcError"
+          }
+        }
+      },
+      "JsonRpcError": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {}
+          }
+        }
+      },
+      "ToolDefinition": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "inputSchema": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {}
+          }
+        }
+      },
+      "ResourceDefinition": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "uri": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          }
+        }
+      },
+      "PromptDefinition": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "required": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ContentItem": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "uri": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {}
+          }
+        }
+      },
+      "ResourceContent": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "uri": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "blob": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
