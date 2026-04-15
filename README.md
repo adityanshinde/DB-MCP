@@ -166,6 +166,7 @@ Claude will see these tools through the MCP protocol:
 - `get_database_info`
 - `run_query`
 - `list_tables`
+- `db_execute_stored_procedure`
 - `search_tables`
 - `search_columns`
 - `get_table_schema`

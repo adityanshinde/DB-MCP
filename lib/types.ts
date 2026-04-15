@@ -5,6 +5,7 @@ export type ToolName =
   | 'get_database_info'
   | 'run_query'
   | 'db_execute_read_query'
+  | 'db_execute_stored_procedure'
   | 'github_list_org_repos'
   | 'github_get_repo_tree'
   | 'github_get_file_content'
@@ -63,6 +64,13 @@ export type RunQueryInput = {
 } & PostgresConnectionInput;
 
 export type ExecuteReadQueryInput = RunQueryInput;
+
+export type ExecuteStoredProcedureInput = {
+  db: DBType;
+  procedure: string;
+  schema?: string;
+  params?: unknown[];
+} & PostgresConnectionInput;
 
 export type PostgresConnectionInput = {
   connection?: string;
@@ -451,6 +459,7 @@ export type ToolInputMap = {
   get_database_info: GetDatabaseInfoInput;
   run_query: RunQueryInput;
   'db_execute_read_query': ExecuteReadQueryInput;
+  'db_execute_stored_procedure': ExecuteStoredProcedureInput;
   'github_list_org_repos': GitHubListOrgReposInput;
   'github_get_repo_tree': GitHubRepoTreeInput;
   'github_get_file_content': GitHubFileContentInput;

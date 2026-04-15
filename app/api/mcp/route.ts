@@ -25,6 +25,7 @@ import { getTableSchema } from '@/lib/tools/getSchema';
 import { getTableSampleByColumns } from '@/lib/tools/getTableSampleByColumns';
 import { getTableSummary } from '@/lib/tools/getTableSummary';
 import { executeReadQuery } from '@/lib/tools/executeReadQuery';
+import { executeStoredProcedure } from '@/lib/tools/executeStoredProcedure';
 import { listOrgRepos } from '@/lib/tools/github/listOrgRepos';
 import { getRepoTree } from '@/lib/tools/github/getRepoTree';
 import { getFileContent } from '@/lib/tools/github/getFileContent';
@@ -1072,6 +1073,28 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
+    'db_execute_stored_procedure',
+    {
+      title: 'Execute Stored Procedure',
+      description: 'Execute an allowlisted stored procedure and return any rows it produces.',
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        procedure: z.string().min(1),
+        schema: z.string().optional(),
+        params: z.array(z.unknown()).default([])
+      })
+    },
+    async ({ db, procedure, schema, params, connection }: any) =>
+      toTextResult(await executeStoredProcedure({ db, procedure, schema, params, connection }, undefined, connection))
+  );
+
+  server.registerTool(
     'list_tables',
     {
       title: 'List Tables',
@@ -1678,6 +1701,16 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         }
 
         const result = await executeReadQuery(input.db, input.query, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'db_execute_stored_procedure': {
+        const input = body.input as ToolRequestWithCredentials<'db_execute_stored_procedure'>['input'];
+        if (!input?.db || !input?.procedure) {
+          return withCors(jsonError('db_execute_stored_procedure requires db and procedure.', 400));
+        }
+
+        const result = await executeStoredProcedure(input, body.credentials, (input as { connection?: string }).connection);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
