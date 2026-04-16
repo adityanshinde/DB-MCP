@@ -12,6 +12,7 @@ import { compareSchema } from '@/lib/tools/compareSchema';
 import { getForeignKeySummary } from '@/lib/tools/getForeignKeySummary';
 import { getDatabaseInfo } from '@/lib/tools/getDatabaseInfo';
 import { getColumnStats } from '@/lib/tools/getColumnStats';
+import { checkDataQuality, explainQueryVerbose, findUnusedIndexes, getColumnCardinality, getProcedureParams, getSchemaDiff, getTableConstraints, getTableDependencies, getTableIndexesUsage, sampleRowsByFilter } from '@/lib/tools/dbExtensions';
 import { compareObjectVersions } from '@/lib/tools/compareObjectVersions';
 import { getDependencyGraph } from '@/lib/tools/getDependencyGraph';
 import { getFunctionSummary } from '@/lib/tools/getFunctionSummary';
@@ -1317,6 +1318,26 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
+    'get_procedure_params',
+    {
+      title: 'Get Procedure Params',
+      description: 'Return only the parameter list for a stored procedure.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        procedure: z.string().min(1),
+        schema: z.string().optional()
+      })
+    },
+    async ({ db, procedure, schema, connection }: any) => toTextResult(await getProcedureParams(db, procedure, schema, undefined, connection))
+  );
+
+  server.registerTool(
     'get_function_summary',
     {
       title: 'Get Function Summary',
@@ -1355,6 +1376,30 @@ export function createMcpServer(): McpServer {
       })
     },
     async ({ db, table, schema, limit, connection }: any) => toTextResult(await getSampleRows(db, table, schema, limit, undefined, connection))
+  );
+
+  server.registerTool(
+    'sample_rows_by_filter',
+    {
+      title: 'Sample Rows By Filter',
+      description: 'Return a small, safely filtered sample of rows using structured equality filters.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().min(1),
+        schema: z.string().optional(),
+        filters: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+        limit: z.number().int().min(1).max(10).default(5),
+        order_by: z.string().optional(),
+        order_direction: z.enum(['asc', 'desc']).default('asc')
+      })
+    },
+    async ({ db, table, schema, filters, limit, order_by, order_direction, connection }: any) => toTextResult(await sampleRowsByFilter(db, table, schema, filters, limit, order_by, order_direction, undefined, connection))
   );
 
   server.registerTool(
@@ -1420,6 +1465,25 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
+    'explain_query_verbose',
+    {
+      title: 'Explain Query Verbose',
+      description: 'Return a more detailed read-only query plan summary without executing the query.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        query: z.string().min(1)
+      })
+    },
+    async ({ db, query, connection }: any) => toTextResult(await explainQueryVerbose(db, query, undefined, connection))
+  );
+
+  server.registerTool(
     'compare_schema',
     {
       title: 'Compare Schema',
@@ -1442,6 +1506,91 @@ export function createMcpServer(): McpServer {
       toTextResult(await compareSchema(db, left_table, right_table, left_schema, right_schema, undefined, connection))
   );
 
+  server.registerTool(
+    'get_schema_diff',
+    {
+      title: 'Get Schema Diff',
+      description: 'Compare two tables and report added, removed, and changed columns.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        left_table: z.string().min(1),
+        right_table: z.string().min(1),
+        left_schema: z.string().optional(),
+        right_schema: z.string().optional()
+      })
+    },
+    async ({ db, left_table, right_table, left_schema, right_schema, connection }: any) =>
+      toTextResult(await getSchemaDiff(db, left_table, right_table, left_schema, right_schema, undefined, connection))
+  );
+
+  server.registerTool(
+    'get_column_stats',
+    {
+      title: 'Get Column Stats',
+      description: 'Return compact row and cardinality stats for a few table columns.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().min(1),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(5).default(5)
+      })
+    },
+    async ({ db, table, schema, limit, connection }: any) => toTextResult(await getColumnStats(db, table, schema, limit, undefined, connection))
+  );
+
+  server.registerTool(
+    'get_column_cardinality',
+    {
+      title: 'Get Column Cardinality',
+      description: 'Return compact distinct-value and null-ratio metrics for up to five columns.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().min(1),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(5).default(5)
+      })
+    },
+    async ({ db, table, schema, limit, connection }: any) => toTextResult(await getColumnCardinality(db, table, schema, limit, undefined, connection))
+  );
+
+  server.registerTool(
+    'check_data_quality',
+    {
+      title: 'Check Data Quality',
+      description: 'Summarize nulls, low-cardinality columns, and uniqueness hints for a table.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().min(1),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(5).default(5)
+      })
+    },
+    async ({ db, table, schema, limit, connection }: any) => toTextResult(await checkDataQuality(db, table, schema, limit, undefined, connection))
+  );
   server.registerTool(
     'compare_object_versions',
     {
@@ -1486,6 +1635,27 @@ export function createMcpServer(): McpServer {
       })
     },
     async ({ db, table, schema, limit, connection }: any) => toTextResult(await getDependencyGraph(db, table, schema, limit, undefined, connection))
+  );
+
+  server.registerTool(
+    'get_table_dependencies',
+    {
+      title: 'Get Table Dependencies',
+      description: 'Return the same foreign-key dependency graph under a table-focused alias.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().optional(),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(20).default(10)
+      })
+    },
+    async ({ db, table, schema, limit, connection }: any) => toTextResult(await getTableDependencies(db, table, schema, limit, undefined, connection))
   );
 
   server.registerTool(
@@ -1573,6 +1743,46 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
+    'get_table_indexes_usage',
+    {
+      title: 'Get Table Indexes Usage',
+      description: 'Inspect table indexes together with usage counters where the database exposes them.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().optional(),
+        schema: z.string().optional()
+      })
+    },
+    async ({ db, table, schema, connection }: any) => toTextResult(await getTableIndexesUsage(db, table, schema, undefined, connection))
+  );
+
+  server.registerTool(
+    'find_unused_indexes',
+    {
+      title: 'Find Unused Indexes',
+      description: 'Identify indexes with zero observed usage and return cautionary warnings.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().optional(),
+        schema: z.string().optional()
+      })
+    },
+    async ({ db, table, schema, connection }: any) => toTextResult(await findUnusedIndexes(db, table, schema, undefined, connection))
+  );
+
+  server.registerTool(
     'get_constraints',
     {
       title: 'Get Constraints',
@@ -1590,6 +1800,26 @@ export function createMcpServer(): McpServer {
       })
     },
     async ({ db, table, schema, connection }: any) => toTextResult(await getConstraints(db, table, schema, undefined, connection))
+  );
+
+  server.registerTool(
+    'get_table_constraints',
+    {
+      title: 'Get Table Constraints',
+      description: 'Inspect primary keys, unique constraints, foreign keys, and checks for a table.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().optional(),
+        schema: z.string().optional()
+      })
+    },
+    async ({ db, table, schema, connection }: any) => toTextResult(await getTableConstraints(db, table, schema, undefined, connection))
   );
 
   server.registerTool(

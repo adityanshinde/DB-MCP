@@ -39,11 +39,15 @@ export type ToolName =
   | 'get_view_definition'
   | 'get_view_summary'
   | 'get_procedure_summary'
+  | 'get_procedure_params'
   | 'get_function_summary'
   | 'get_sample_rows'
   | 'explain_query'
+  | 'explain_query_verbose'
   | 'compare_schema'
+  | 'get_schema_diff'
   | 'get_column_stats'
+  | 'get_column_cardinality'
   | 'search_views'
   | 'get_row_count'
   | 'get_foreign_key_summary'
@@ -51,11 +55,17 @@ export type ToolName =
   | 'search_procedures'
   | 'get_table_sample_by_columns'
   | 'get_dependency_graph'
+  | 'get_table_dependencies'
   | 'compare_object_versions'
   | 'get_relation_path'
   | 'get_relationships'
   | 'get_indexes'
+  | 'get_table_indexes_usage'
+  | 'find_unused_indexes'
   | 'get_constraints'
+  | 'get_table_constraints'
+  | 'sample_rows_by_filter'
+  | 'check_data_quality'
   | 'list_stored_procedures';
 
 export type RunQueryInput = {
@@ -298,6 +308,43 @@ export type GetProcedureSummaryInput = {
   schema?: string;
 } & PostgresConnectionInput;
 
+export type GetProcedureParamsInput = GetProcedureSummaryInput;
+
+export type GetTableConstraintsInput = {
+  db: DBType;
+  table?: string;
+  schema?: string;
+} & PostgresConnectionInput;
+
+export type ExplainQueryVerboseInput = ExplainQueryInput;
+
+export type GetColumnCardinalityInput = GetColumnStatsInput;
+
+export type GetTableIndexesUsageInput = GetIndexesInput;
+
+export type FindUnusedIndexesInput = GetIndexesInput;
+
+export type GetTableDependenciesInput = GetDependencyGraphInput;
+
+export type GetSchemaDiffInput = CompareSchemaInput;
+
+export type SampleRowsByFilterInput = {
+  db: DBType;
+  table: string;
+  schema?: string;
+  filters?: Record<string, string | number | boolean | null>;
+  limit?: number;
+  order_by?: string;
+  order_direction?: 'asc' | 'desc';
+} & PostgresConnectionInput;
+
+export type CheckDataQualityInput = {
+  db: DBType;
+  table: string;
+  schema?: string;
+  limit?: number;
+} & PostgresConnectionInput;
+
 export type GetFunctionSummaryInput = {
   db: DBType;
   func: string;
@@ -493,11 +540,15 @@ export type ToolInputMap = {
   get_view_definition: GetViewDefinitionInput;
   get_view_summary: GetViewSummaryInput;
   get_procedure_summary: GetProcedureSummaryInput;
+  get_procedure_params: GetProcedureParamsInput;
   get_function_summary: GetFunctionSummaryInput;
   get_sample_rows: GetSampleRowsInput;
   explain_query: ExplainQueryInput;
+  explain_query_verbose: ExplainQueryVerboseInput;
   compare_schema: CompareSchemaInput;
+  get_schema_diff: GetSchemaDiffInput;
   get_column_stats: GetColumnStatsInput;
+  get_column_cardinality: GetColumnCardinalityInput;
   search_views: SearchViewsInput;
   get_row_count: GetRowCountInput;
   get_foreign_key_summary: GetForeignKeySummaryInput;
@@ -505,11 +556,17 @@ export type ToolInputMap = {
   search_procedures: SearchProceduresInput;
   get_table_sample_by_columns: GetTableSampleByColumnsInput;
   get_dependency_graph: GetDependencyGraphInput;
+  get_table_dependencies: GetTableDependenciesInput;
   compare_object_versions: CompareObjectVersionsInput;
   get_relation_path: GetRelationPathInput;
   get_relationships: GetRelationshipsInput;
   get_indexes: GetIndexesInput;
+  get_table_indexes_usage: GetTableIndexesUsageInput;
+  find_unused_indexes: FindUnusedIndexesInput;
   get_constraints: GetConstraintsInput;
+  get_table_constraints: GetTableConstraintsInput;
+  sample_rows_by_filter: SampleRowsByFilterInput;
+  check_data_quality: CheckDataQualityInput;
   list_stored_procedures: ListStoredProceduresInput;
 };
 
