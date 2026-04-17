@@ -43,6 +43,9 @@ const postgresConnections = Object.keys(parsedPostgresConnections).length > 0
     : {};
 
 export const CONFIG = {
+  auth: {
+    credentialTtlSeconds: Math.max(172800, Math.min(259200, Number(process.env.MCP_CREDENTIAL_TTL_SECONDS || '259200')))
+  },
   postgres: {
     url: legacyPostgresUrl,
     defaultConnection: resolveDefaultPostgresConnection(postgresConnections),

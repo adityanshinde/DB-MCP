@@ -1,5 +1,6 @@
 import sql from 'mssql';
 
+import { resolveActiveCredentials } from '@/lib/auth/credentials';
 import { CONFIG } from '@/lib/config';
 import type { DatabaseCredentials } from '@/lib/types';
 
@@ -26,14 +27,6 @@ function createStaticPool(): Promise<sql.ConnectionPool> {
   }
 
   throw new Error('MSSQL credentials are not fully configured. Set MSSQL_CONNECTION_STRING.');
-}
-
-function getPool(): Promise<sql.ConnectionPool> {
-  if (!poolPromise) {
-    poolPromise = createStaticPool();
-  }
-
-  return poolPromise as Promise<sql.ConnectionPool>;
 }
 
 function getDynamicPool(credentials: DatabaseCredentials['mssql']): Promise<sql.ConnectionPool> {
@@ -71,8 +64,8 @@ export async function queryMSSQL(
   params: Record<string, unknown> = {},
   credentials?: DatabaseCredentials['mssql']
 ) {
-  const isDynamic = Boolean(credentials);
-  const pool = credentials ? await getDynamicPool(credentials) : await getPool();
+  const resolvedCredentials = credentials ?? resolveActiveCredentials('mssql').mssql;
+  const pool = await getDynamicPool(resolvedCredentials);
   let didFail = false;
 
   try {
@@ -96,13 +89,11 @@ export async function queryMSSQL(
     logMssqlEvent('query failed', normalizedError);
     throw normalizedError;
   } finally {
-    if (isDynamic) {
-      try {
-        await pool.close();
-        logMssqlEvent(didFail ? 'dynamic pool closed after failure' : 'dynamic pool closed');
-      } catch (error) {
-        logMssqlEvent('failed to close dynamic pool', error);
-      }
+    try {
+      await pool.close();
+      logMssqlEvent(didFail ? 'dynamic pool closed after failure' : 'dynamic pool closed');
+    } catch (error) {
+      logMssqlEvent('failed to close dynamic pool', error);
     }
   }
 }

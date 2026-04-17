@@ -1,5 +1,6 @@
 import { Pool, type PoolClient, type QueryConfig, type QueryResultRow } from 'pg';
 
+import { resolveActiveCredentials } from '@/lib/auth/credentials';
 import { CONFIG } from '@/lib/config';
 import type { DatabaseCredentials } from '@/lib/types';
 
@@ -87,8 +88,8 @@ export async function queryPostgres<T extends QueryResultRow = QueryResultRow>(
   credentials?: DatabaseCredentials['postgres'],
   connection?: string
 ) {
-  const isDynamic = Boolean(credentials);
-  const currentPool = credentials ? getDynamicPool(credentials) : getPool(connection);
+  const resolvedCredentials = credentials ?? resolveActiveCredentials('postgres').postgres;
+  const currentPool = getDynamicPool(resolvedCredentials);
   let client: PoolClient | null = null;
   let releaseError: Error | undefined;
 
@@ -115,13 +116,11 @@ export async function queryPostgres<T extends QueryResultRow = QueryResultRow>(
       client.release(releaseError);
     }
 
-    if (isDynamic) {
-      try {
-        await currentPool.end();
-        logPostgresEvent('dynamic pool closed');
-      } catch (error) {
-        logPostgresEvent('failed to close dynamic pool', error);
-      }
+    try {
+      await currentPool.end();
+      logPostgresEvent('dynamic pool closed');
+    } catch (error) {
+      logPostgresEvent('failed to close dynamic pool', error);
     }
   }
 }

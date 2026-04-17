@@ -1,5 +1,6 @@
 import mysql from 'mysql2/promise';
 
+import { resolveActiveCredentials } from '@/lib/auth/credentials';
 import { CONFIG } from '@/lib/config';
 import type { DatabaseCredentials } from '@/lib/types';
 
@@ -15,26 +16,9 @@ function logMySqlEvent(message: string, error?: unknown): void {
 }
 
 function getDefaultPool(): mysql.Pool {
-  if (defaultPool) return defaultPool;
-
-  const host = process.env.MYSQL_HOST || 'localhost';
-  const port = parseInt(process.env.MYSQL_PORT || '3306');
-  const user = process.env.MYSQL_USER || 'root';
-  const password = process.env.MYSQL_PASSWORD || '';
-  const database = process.env.MYSQL_DATABASE || '';
-
-  defaultPool = mysql.createPool({
-    host,
-    port,
-    user,
-    password,
-    database,
-    waitForConnections: true,
-    connectionLimit: 5,
-    queueLimit: 0
-  });
-
-  logMySqlEvent('default pool created');
+  if (!defaultPool) {
+    throw new Error('A valid credential token is required for MySQL connections.');
+  }
 
   return defaultPool;
 }
@@ -57,7 +41,8 @@ function getDynamicPool(credentials: DatabaseCredentials): mysql.Pool {
 }
 
 async function withPoolConnection<T>(credentials: DatabaseCredentials | undefined, work: (connection: mysql.PoolConnection) => Promise<T>): Promise<T> {
-  const pool = credentials ? getDynamicPool(credentials) : getDefaultPool();
+  const resolvedCredentials = credentials ?? resolveActiveCredentials('mysql');
+  const pool = getDynamicPool(resolvedCredentials);
   let connection: mysql.PoolConnection | null = null;
 
   try {
@@ -66,13 +51,11 @@ async function withPoolConnection<T>(credentials: DatabaseCredentials | undefine
   } finally {
     connection?.release();
 
-    if (credentials) {
-      try {
-        await pool.end();
-        logMySqlEvent('dynamic pool closed');
-      } catch (error) {
-        logMySqlEvent('failed to close dynamic pool', error);
-      }
+    try {
+      await pool.end();
+      logMySqlEvent('dynamic pool closed');
+    } catch (error) {
+      logMySqlEvent('failed to close dynamic pool', error);
     }
   }
 }

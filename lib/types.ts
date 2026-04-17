@@ -6,6 +6,8 @@ export type ToolName =
   | 'run_query'
   | 'db_execute_read_query'
   | 'db_execute_stored_procedure'
+  | 'list_connections'
+  | 'list_postgres_connections'
   | 'github_list_org_repos'
   | 'github_get_repo_tree'
   | 'github_get_file_content'
@@ -461,6 +463,10 @@ export type ListStoredProceduresInput = {
   db: DBType;
 } & PostgresConnectionInput;
 
+export type ListConnectionsInput = Record<string, never>;
+
+export type ListPostgresConnectionsInput = Record<string, never>;
+
 export type GetTableSchemaInput = {
   db: DBType;
   table: string;
@@ -507,6 +513,8 @@ export type ToolInputMap = {
   run_query: RunQueryInput;
   'db_execute_read_query': ExecuteReadQueryInput;
   'db_execute_stored_procedure': ExecuteStoredProcedureInput;
+  list_connections: ListConnectionsInput;
+  list_postgres_connections: ListPostgresConnectionsInput;
   'github_list_org_repos': GitHubListOrgReposInput;
   'github_get_repo_tree': GitHubRepoTreeInput;
   'github_get_file_content': GitHubFileContentInput;

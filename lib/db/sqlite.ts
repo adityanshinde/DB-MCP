@@ -1,6 +1,7 @@
 import sqlite3 from 'sqlite3';
 import path from 'node:path';
 
+import { resolveActiveCredentials } from '@/lib/auth/credentials';
 import { CONFIG } from '@/lib/config';
 import type { DatabaseCredentials } from '@/lib/types';
 
@@ -48,28 +49,11 @@ function resolveSQLitePath(filePath: string): string {
 }
 
 function getDefaultDatabase(): Promise<sqlite3.Database> {
-  return new Promise((resolve, reject) => {
-    if (defaultDb) {
-      resolve(defaultDb);
-      return;
-    }
+  if (!defaultDb) {
+    throw new Error('A valid credential token is required for SQLite connections.');
+  }
 
-    const filePath = process.env.SQLITE_PATH || ':memory:';
-    const db = new sqlite3.Database(filePath, (err) => {
-      if (err) reject(err);
-      else {
-        try {
-          db.configure('busyTimeout', CONFIG.app.queryTimeoutMs);
-        } catch {
-          // Ignore configuration failures; the database is still usable.
-        }
-
-        defaultDb = db;
-        logSqliteEvent('default database opened');
-        resolve(db);
-      }
-    });
-  });
+  return Promise.resolve(defaultDb);
 }
 
 function getDynamicDatabase(credentials: DatabaseCredentials): Promise<sqlite3.Database> {
@@ -96,24 +80,23 @@ function getDynamicDatabase(credentials: DatabaseCredentials): Promise<sqlite3.D
 }
 
 async function withSQLiteDatabase<T>(credentials: DatabaseCredentials | undefined, work: (db: sqlite3.Database) => Promise<T>): Promise<T> {
-  const db = await (credentials ? getDynamicDatabase(credentials) : getDefaultDatabase());
+  const resolvedCredentials = credentials ?? resolveActiveCredentials('sqlite');
+  const db = await getDynamicDatabase(resolvedCredentials);
 
   try {
     return await work(db);
   } finally {
-    if (credentials) {
-      await new Promise<void>((resolve) => {
-        db.close((error) => {
-          if (error) {
-            logSqliteEvent('failed to close dynamic database', error);
-          } else {
-            logSqliteEvent('dynamic database closed');
-          }
+    await new Promise<void>((resolve) => {
+      db.close((error) => {
+        if (error) {
+          logSqliteEvent('failed to close dynamic database', error);
+        } else {
+          logSqliteEvent('dynamic database closed');
+        }
 
-          resolve();
-        });
+        resolve();
       });
-    }
+    });
   }
 }
 

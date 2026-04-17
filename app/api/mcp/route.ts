@@ -5,6 +5,8 @@ import { McpServer, WebStandardStreamableHTTPServerTransport } from '@modelconte
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 
+import { listConnections, listPostgresConnections } from '@/lib/tools/listConnections';
+import { resolveCredentialContext, withCredentialContext, type CredentialContext } from '@/lib/auth/credentials';
 import { CONFIG } from '@/lib/config';
 
 import { getConstraints } from '@/lib/tools/getConstraints';
@@ -64,9 +66,12 @@ export const dynamic = 'force-dynamic';
 
 const ALLOWED_ORIGIN = process.env.MCP_UI_ORIGIN?.trim() || '';
 const ALLOWED_METHODS = 'POST, GET, DELETE, OPTIONS';
-const ALLOWED_HEADERS = 'Content-Type, MCP-Protocol-Version, Mcp-Session-Id';
+const ALLOWED_HEADERS = 'Content-Type, MCP-Protocol-Version, Mcp-Session-Id, Authorization, X-MCP-Token';
 const SUPPORTED_DATABASES = ['postgres', 'mssql', 'mysql', 'sqlite'] as const;
-const passthroughObject = <T extends z.ZodRawShape>(shape: T) => z.object(shape).passthrough();
+const passthroughObject = <T extends z.ZodRawShape>(shape: T) => z.object({
+  connection: z.string().min(1).optional(),
+  ...shape
+} as T & { connection: z.ZodOptional<z.ZodString> }).passthrough();
 
 installProcessGuards();
 
@@ -76,6 +81,7 @@ type SessionEntry = {
   sessionId: string;
   server: McpServer;
   transport: WebStandardStreamableHTTPServerTransport;
+  credentialContext: CredentialContext | null;
   ready: Promise<void>;
   queue: Promise<void>;
   createdAt: number;
@@ -90,6 +96,36 @@ type SessionResolution = {
 };
 
 const sessionEntries = new Map<string, SessionEntry>();
+
+function readCredentialToken(request: Request): string | null {
+  const authorization = request.headers.get('Authorization')?.trim();
+  if (authorization) {
+    const match = /^Bearer\s+(.+)$/i.exec(authorization);
+    if (match?.[1]?.trim()) {
+      return match[1].trim();
+    }
+  }
+
+  return request.headers.get('X-MCP-Token')?.trim() || null;
+}
+
+async function resolveRequestCredentialContext(request: Request): Promise<CredentialContext | null> {
+  const token = readCredentialToken(request);
+  if (!token) {
+    return null;
+  }
+
+  const context = await resolveCredentialContext(token);
+  if (!context) {
+    logMcpEvent('request.invalid_token_ignored', {
+      requestType: 'mcp',
+      path: new URL(request.url).pathname
+    }, 'warn');
+    return null;
+  }
+
+  return context;
+}
 
 function logRequestEvent(event: string, request: Request, extra: Record<string, unknown> = {}): void {
   logMcpEvent(event, {
@@ -126,7 +162,7 @@ function isInitializationPayload(rawBody?: string): boolean {
   return readMcpMethod(rawBody) === 'initialize';
 }
 
-async function createSessionEntry(sessionId: string): Promise<SessionEntry> {
+async function createSessionEntry(sessionId: string, credentialContext: CredentialContext | null): Promise<SessionEntry> {
   MCP_METRICS.session.sessionsCreated += 1;
   const server = createMcpServer();
   const transport = new WebStandardStreamableHTTPServerTransport({
@@ -140,6 +176,7 @@ async function createSessionEntry(sessionId: string): Promise<SessionEntry> {
     sessionId,
     server,
     transport,
+    credentialContext,
     ready: Promise.resolve(),
     queue: Promise.resolve(),
     createdAt: Date.now(),
@@ -159,7 +196,7 @@ async function createSessionEntry(sessionId: string): Promise<SessionEntry> {
   }
 }
 
-async function getSessionEntry(sessionId: string, allowCreate: boolean): Promise<{ entry: SessionEntry | null; created: boolean; reused: boolean }> {
+async function getSessionEntry(sessionId: string, allowCreate: boolean, credentialContext: CredentialContext | null): Promise<{ entry: SessionEntry | null; created: boolean; reused: boolean }> {
   const existing = sessionEntries.get(sessionId);
   if (existing) {
     existing.lastUsedAt = Date.now();
@@ -180,19 +217,30 @@ async function getSessionEntry(sessionId: string, allowCreate: boolean): Promise
   }
 
   return {
-    entry: await createSessionEntry(sessionId),
+    entry: await createSessionEntry(sessionId, credentialContext),
     created: true,
     reused: false
   };
 }
 
-async function resolveSessionEntry(request: Request, rawBody?: string): Promise<SessionResolution | Response> {
+async function resolveSessionEntry(request: Request, rawBody?: string, credentialContext: CredentialContext | null = null): Promise<SessionResolution | Response> {
   const sessionId = readSessionId(request);
   const initializing = isInitializationPayload(rawBody);
 
   if (sessionId) {
     const existing = sessionEntries.get(sessionId);
     if (existing) {
+      if ((existing.credentialContext?.tokenHash || null) !== (credentialContext?.tokenHash || null)) {
+        MCP_METRICS.request.validationFailures += 1;
+        logMcpEvent('request.validation_failed', {
+          sessionId,
+          requestType: 'jsonrpc',
+          message: 'Credential token changed for an existing MCP session.',
+          validationFailures: MCP_METRICS.request.validationFailures
+        }, 'warn');
+        return jsonError('Credential token changed for an existing MCP session.', 401);
+      }
+
       existing.lastUsedAt = Date.now();
       MCP_METRICS.session.sessionsReused += 1;
       return {
@@ -216,7 +264,7 @@ async function resolveSessionEntry(request: Request, rawBody?: string): Promise<
 
     return {
       sessionId,
-      entry: await createSessionEntry(sessionId),
+      entry: await createSessionEntry(sessionId, credentialContext),
       created: true,
       reused: false
     };
@@ -235,14 +283,16 @@ async function resolveSessionEntry(request: Request, rawBody?: string): Promise<
   const generatedSessionId = randomUUID();
   return {
     sessionId: generatedSessionId,
-    entry: await createSessionEntry(generatedSessionId),
+    entry: await createSessionEntry(generatedSessionId, credentialContext),
     created: true,
     reused: false
   };
 }
 
 async function handleSessionTransportRequest(entry: SessionEntry, request: Request): Promise<Response> {
-  const responsePromise = entry.queue.then(() => entry.transport.handleRequest(request));
+  const responsePromise = entry.queue.then(() =>
+    withCredentialContext(entry.credentialContext, () => entry.transport.handleRequest(request))
+  );
   entry.queue = responsePromise.then(() => undefined, () => undefined);
   return responsePromise;
 }
@@ -322,8 +372,10 @@ function withCors(response: Response): Response {
     headers.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
     headers.set('Vary', 'Origin');
   }
+
   headers.set('Access-Control-Allow-Methods', ALLOWED_METHODS);
   headers.set('Access-Control-Allow-Headers', ALLOWED_HEADERS);
+
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -1659,27 +1711,6 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
-    'get_column_stats',
-    {
-      title: 'Get Column Stats',
-      description: 'Return compact row and cardinality stats for a few table columns.',
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: true
-      },
-      inputSchema: passthroughObject({
-        db: z.enum(SUPPORTED_DATABASES),
-        table: z.string().min(1),
-        schema: z.string().optional(),
-        limit: z.number().int().min(1).max(5).default(5)
-      })
-    },
-    async ({ db, table, schema, limit, connection }: any) => toTextResult(await getColumnStats(db, table, schema, limit, undefined, connection))
-  );
-
-  server.registerTool(
     'get_relationships',
     {
       title: 'Get Relationships',
@@ -1840,10 +1871,42 @@ export function createMcpServer(): McpServer {
     async ({ db, connection }: any) => toTextResult(await listStoredProcedures(db, undefined, connection))
   );
 
+  server.registerTool(
+    'list_connections',
+    {
+      title: 'List Connections',
+      description: 'List available database connections for the active token or the configured server.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({})
+    },
+    async () => toTextResult(await listConnections())
+  );
+
+  server.registerTool(
+    'list_postgres_connections',
+    {
+      title: 'List Postgres Connections',
+      description: 'List available Postgres connection aliases for the active token or the configured server.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: z.object({})
+    },
+    async () => toTextResult(await listPostgresConnections())
+  );
+
   return server;
 }
 
-async function handleMcpRequest(request: Request, rawBody?: string): Promise<Response> {
+async function handleMcpRequest(request: Request, rawBody?: string, credentialContext: CredentialContext | null = null): Promise<Response> {
   MCP_METRICS.request.jsonRpcRequests += 1;
   logRequestEvent('request.incoming', request, {
     requestKind: 'jsonrpc',
@@ -1853,14 +1916,16 @@ async function handleMcpRequest(request: Request, rawBody?: string): Promise<Res
   const coldStartForThisRequest = isColdStart;
 
   try {
-    const server = createMcpServer();
-    const transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true
-    });
+    const response = await withCredentialContext(credentialContext, async () => {
+      const server = createMcpServer();
+      const transport = new WebStandardStreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true
+      });
 
-    await server.connect(transport);
-    const response = await transport.handleRequest(request);
+      await server.connect(transport);
+      return transport.handleRequest(request);
+    });
 
     isColdStart = false;
     return withCacheHeaders(withCors(response), coldStartForThisRequest);
@@ -2395,7 +2460,8 @@ export async function OPTIONS() {
 export async function GET(request: Request) {
   try {
     MCP_METRICS.request.totalRequests += 1;
-    return await handleMcpRequest(request);
+    const credentialContext = await resolveRequestCredentialContext(request);
+    return await handleMcpRequest(request, undefined, credentialContext);
   } catch (error) {
     MCP_METRICS.request.errors += 1;
     logMcpError('request.get_failed', error, { errors: MCP_METRICS.request.errors });
@@ -2418,11 +2484,12 @@ export async function POST(request: Request) {
   try {
     MCP_METRICS.request.totalRequests += 1;
     const rawBody = await request.clone().text();
+    const credentialContext = await resolveRequestCredentialContext(request);
     if (isMcpJsonRpcBody(rawBody)) {
-      return await handleMcpRequest(request, rawBody);
+      return await handleMcpRequest(request, rawBody, credentialContext);
     }
 
-    return await handleLegacyRequest(request);
+    return await withCredentialContext(credentialContext, () => handleLegacyRequest(request));
   } catch (error) {
     MCP_METRICS.request.errors += 1;
     logMcpError('request.post_failed', error, { errors: MCP_METRICS.request.errors });

@@ -71,6 +71,7 @@ GITHUB_SUMMARY_CONTEXT_LINES=3
 GITHUB_SUMMARY_PREVIEW_BYTES=2000
 UPSTASH_REDIS_REST_URL=https://your-upstash-instance.upstash.io
 UPSTASH_REDIS_REST_TOKEN=replace_with_upstash_token
+MCP_CREDENTIAL_TTL_SECONDS=259200
 MCP_CACHE_L1=true
 MCP_CACHE_L1_MAX_ENTRIES=256
 MCP_UI_ORIGIN=https://your-allowed-ui.example.com
@@ -80,6 +81,47 @@ SQLITE_ALLOWED_DIR=C:\path\to\allowed\sqlite\dir
 Set `POSTGRES_URLS` to a JSON object of named connections when you need more than one Postgres database from the same MCP server. Pass the matching `connection` name when calling a Postgres tool; if you omit it, `POSTGRES_DEFAULT` is used. `POSTGRES_URL` still works as a backward-compatible single-database fallback.
 
 Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` to enable the shared L2 cache. `MCP_CACHE_L1=true` keeps the optional in-memory L1 cache on for warm instances.
+
+Set `MCP_CREDENTIAL_TTL_SECONDS` to control how long issued personal access tokens stay valid. The default is 259200 seconds, which is 72 hours.
+
+For per-user credential mode, POST a JSON payload to `/api/credentials` with your database connections. The server stores the submitted credentials encrypted, returns a bearer token once, and uses that token to resolve the right connection set on later MCP requests.
+
+Example payload:
+
+```json
+{
+  "label": "Aditya local profile",
+  "defaultConnection": "main",
+  "connections": [
+    {
+      "name": "main",
+      "db": "postgres",
+      "credentials": {
+        "host": "localhost",
+        "port": 5432,
+        "username": "postgres",
+        "password": "secret",
+        "database": "appdb"
+      }
+    },
+    {
+      "name": "reporting",
+      "db": "postgres",
+      "credentials": {
+        "host": "localhost",
+        "port": 5432,
+        "username": "postgres",
+        "password": "secret",
+        "database": "reportdb"
+      }
+    }
+  ]
+}
+```
+
+Send the returned token as `Authorization: Bearer <token>` on `/api/mcp` requests. The token context expires after the configured TTL, so users need to re-issue a fresh token when it lapses.
+
+All database types can carry multiple named connections in one token. Pick a default connection so the server has a deterministic fallback when the agent does not send `connection`.
 
 Set `GITHUB_PAT`, `GITHUB_ORG_NAME`, and `GITHUB_ALLOWED_REPOS` to enable the read-only GitHub tools. The allowlist accepts exact `owner/repo` entries and org-wide `owner/*` patterns. `GITHUB_ALLOWED_ORGS` lets you restrict org-level listing. `GITHUB_MAX_FILE_SIZE_BYTES` keeps file fetches bounded, `GITHUB_TREE_MAX_DEPTH` limits repository tree traversal, `GITHUB_ORG_REPO_PAGE_SIZE` bounds org listing pages, and `GITHUB_SUMMARY_CONTEXT_LINES` / `GITHUB_SUMMARY_PREVIEW_BYTES` keep summaries compact.
 
@@ -162,6 +204,8 @@ http://localhost:3000/api/mcp
 
 Claude will see these tools through the MCP protocol:
 
+- `list_connections`
+- `list_postgres_connections`
 - `list_schemas`
 - `get_database_info`
 - `run_query`
