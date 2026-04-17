@@ -42,6 +42,7 @@ import { getPullRequestComments } from '@/lib/tools/github/getPullRequestComment
 import { getGitHubMetrics } from '@/lib/tools/github/githubClient';
 import { getViewSummary } from '@/lib/tools/getViewSummary';
 import { listSchemas } from '@/lib/tools/listSchemas';
+import { listPostgresConnections } from '@/lib/tools/listPostgresConnections';
 import { listStoredProcedures } from '@/lib/tools/listStoredProcedures';
 import { listTables } from '@/lib/tools/listTables';
 import { getRowCount } from '@/lib/tools/getRowCount';
@@ -65,7 +66,11 @@ const ALLOWED_ORIGIN = process.env.MCP_UI_ORIGIN?.trim() || '';
 const ALLOWED_METHODS = 'POST, GET, DELETE, OPTIONS';
 const ALLOWED_HEADERS = 'Content-Type, MCP-Protocol-Version, Mcp-Session-Id';
 const SUPPORTED_DATABASES = ['postgres', 'mssql', 'mysql', 'sqlite'] as const;
-const passthroughObject = <T extends z.ZodRawShape>(shape: T) => z.object(shape).passthrough();
+const passthroughObject = <T extends z.ZodRawShape>(shape: T) =>
+  z.object({
+    connection: z.string().optional(),
+    ...shape
+  }).passthrough();
 
 installProcessGuards();
 
@@ -470,6 +475,22 @@ export function createMcpServer(): McpServer {
       })
     },
     async ({ db, connection }: any) => toTextResult(await listSchemas(db, undefined, connection))
+  );
+
+  server.registerTool(
+    'list_postgres_connections',
+    {
+      title: 'List Postgres Connections',
+      description: 'List configured Postgres connection aliases and indicate which one is the default.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({})
+    },
+    async () => toTextResult(await listPostgresConnections())
   );
 
   server.registerTool(
