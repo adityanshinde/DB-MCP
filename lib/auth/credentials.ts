@@ -39,6 +39,39 @@ type StoredCredentialEnvelope = {
   payload: string;
 };
 
+/**
+ * Upstash REST client auto-deserializes JSON string values from GET into objects.
+ * We must accept both the raw string and the parsed object or JSON.parse(object) fails.
+ */
+function parseStoredCredentialEnvelope(raw: unknown): StoredCredentialEnvelope | null {
+  if (raw == null) {
+    return null;
+  }
+
+  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+    const candidate = raw as Record<string, unknown>;
+    if (typeof candidate.expiresAt === 'number' && typeof candidate.payload === 'string') {
+      return {
+        expiresAt: candidate.expiresAt,
+        payload: candidate.payload
+      };
+    }
+
+    return null;
+  }
+
+  if (typeof raw !== 'string') {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parseStoredCredentialEnvelope(parsed);
+  } catch {
+    return null;
+  }
+}
+
 type CredentialConnectionSummary = {
   name: string;
   label?: string;
@@ -221,29 +254,25 @@ export async function resolveCredentialContext(token: string): Promise<Credentia
     return null;
   }
 
-  const raw = await client.get<string>(getCredentialKey(token));
-  if (!raw) {
+  const raw = await client.get(getCredentialKey(token));
+  if (raw == null || raw === '') {
     return null;
   }
 
-  try {
-    const envelope = JSON.parse(raw) as StoredCredentialEnvelope;
-    if (!envelope?.payload || typeof envelope.expiresAt !== 'number' || envelope.expiresAt <= Date.now()) {
-      return null;
-    }
-
-    const profile = decryptProfile(token, envelope.payload);
-    if (!profile || profile.expiresAt <= Date.now()) {
-      return null;
-    }
-
-    return {
-      tokenHash: hashToken(token),
-      profile
-    };
-  } catch {
+  const envelope = parseStoredCredentialEnvelope(raw);
+  if (!envelope?.payload || envelope.expiresAt <= Date.now()) {
     return null;
   }
+
+  const profile = decryptProfile(token, envelope.payload);
+  if (!profile || profile.expiresAt <= Date.now()) {
+    return null;
+  }
+
+  return {
+    tokenHash: hashToken(token),
+    profile
+  };
 }
 
 export function listContextConnections(): CredentialConnectionSummary[] {
