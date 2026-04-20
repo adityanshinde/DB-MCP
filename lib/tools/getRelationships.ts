@@ -87,19 +87,20 @@ export async function getRelationships(
               schemaName: resolvedSchema,
               tableName: table ?? null
             },
-            credentials?.mssql
+            credentials?.mssql,
+            connection
           );
 
           return { relationships: result.rows };
         }
 
         if (db === 'mysql') {
-          const relationships = await getRelationshipsMySQL(table, credentials);
+          const relationships = await getRelationshipsMySQL(table, credentials, connection);
           return { relationships: relationships as Array<Record<string, unknown>> };
         }
 
         if (db === 'sqlite') {
-          const relationships = await getRelationshipsSQLite(table, credentials);
+          const relationships = await getRelationshipsSQLite(table, credentials, connection);
           return { relationships: relationships as Array<Record<string, unknown>> };
         }
 

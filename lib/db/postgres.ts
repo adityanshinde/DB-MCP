@@ -19,6 +19,25 @@ function normalizeConnectionName(connection?: string): string {
   return connection?.trim() || CONFIG.postgres.defaultConnection || 'default';
 }
 
+function ensureSslModeRequired(connectionString: string): string {
+  const trimmed = connectionString.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    if (url.searchParams.get('sslmode') !== 'require') {
+      url.searchParams.set('sslmode', 'require');
+    }
+    return url.toString();
+  } catch {
+    return trimmed.includes('sslmode=require')
+      ? trimmed
+      : `${trimmed}${trimmed.includes('?') ? '&' : '?'}sslmode=require`;
+  }
+}
+
 function getConfiguredConnectionString(connection?: string): string {
   const connectionName = normalizeConnectionName(connection);
   const url = CONFIG.postgres.connections[connectionName] || (connectionName === 'default' ? CONFIG.postgres.url : '');
@@ -32,7 +51,7 @@ function getConfiguredConnectionString(connection?: string): string {
     );
   }
 
-  return url;
+  return ensureSslModeRequired(url);
 }
 
 function getPool(connection?: string): Pool {
@@ -46,6 +65,7 @@ function getPool(connection?: string): Pool {
 
   const pool = new Pool({
     connectionString,
+    ssl: { rejectUnauthorized: false },
     max: 10,
     idleTimeoutMillis: 30_000,
     allowExitOnIdle: true,
@@ -67,10 +87,13 @@ function getDynamicPool(credentials: DatabaseCredentials['postgres']): Pool {
     throw new Error('PostgreSQL credentials not provided.');
   }
 
-  const connectionString = `postgresql://${encodeURIComponent(credentials.username)}:${encodeURIComponent(credentials.password)}@${credentials.host}:${credentials.port}/${credentials.database}`;
+  const connectionString = ensureSslModeRequired(
+    `postgresql://${encodeURIComponent(credentials.username)}:${encodeURIComponent(credentials.password)}@${credentials.host}:${credentials.port}/${credentials.database}`
+  );
 
   return new Pool({
     connectionString,
+    ssl: { rejectUnauthorized: false },
     max: 5,
     idleTimeoutMillis: 5_000,
     allowExitOnIdle: true,
@@ -82,20 +105,18 @@ async function acquireClient(currentPool: Pool): Promise<PoolClient> {
   return currentPool.connect();
 }
 
-export async function queryPostgres<T extends QueryResultRow = QueryResultRow>(
+async function executeQuery<T extends QueryResultRow>(
+  currentPool: Pool,
   sql: string,
-  params: unknown[] = [],
-  credentials?: DatabaseCredentials['postgres'],
-  connection?: string
-) {
-  const resolvedCredentials = credentials ?? resolveActiveCredentials('postgres').postgres;
-  const currentPool = getDynamicPool(resolvedCredentials);
-  let client: PoolClient | null = null;
-  let releaseError: Error | undefined;
+  params: unknown[]
+): Promise<{
+  rows: T[];
+  rowCount: number;
+  fields: string[];
+}> {
+  const client = await acquireClient(currentPool);
 
   try {
-    client = await acquireClient(currentPool);
-
     const result = await client.query<T>({
       text: sql,
       values: params,
@@ -107,20 +128,46 @@ export async function queryPostgres<T extends QueryResultRow = QueryResultRow>(
       rowCount: result.rowCount ?? result.rows.length,
       fields: result.fields.map((field: { name: string }) => field.name)
     };
-  } catch (error) {
-    releaseError = error instanceof Error ? error : new Error('Failed to execute PostgreSQL query.');
-    logPostgresEvent('query failed', releaseError);
-    throw releaseError;
   } finally {
-    if (client) {
-      client.release(releaseError);
+    client.release();
+  }
+}
+
+export async function queryPostgres<T extends QueryResultRow = QueryResultRow>(
+  sql: string,
+  params: unknown[] = [],
+  credentials?: DatabaseCredentials['postgres'],
+  connection?: string
+) {
+  try {
+    if (!credentials) {
+      try {
+        const staticPool = getPool(connection);
+        return await executeQuery<T>(staticPool, sql, params);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        if (message !== 'POSTGRES_URLS or POSTGRES_URL is not configured.') {
+          throw error;
+        }
+      }
     }
 
+    const resolvedCredentials = credentials ?? resolveActiveCredentials('postgres', connection).postgres;
+    const currentPool = getDynamicPool(resolvedCredentials);
+
     try {
-      await currentPool.end();
-      logPostgresEvent('dynamic pool closed');
-    } catch (error) {
-      logPostgresEvent('failed to close dynamic pool', error);
+      return await executeQuery<T>(currentPool, sql, params);
+    } finally {
+      try {
+        await currentPool.end();
+        logPostgresEvent('dynamic pool closed');
+      } catch (error) {
+        logPostgresEvent('failed to close dynamic pool', error);
+      }
     }
+  } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error('Failed to execute PostgreSQL query.');
+    logPostgresEvent('query failed', normalizedError);
+    throw normalizedError;
   }
 }

@@ -18,3 +18,5 @@ coverage/
 *.bak
 *.tmp
 *.swp
+
+/data/

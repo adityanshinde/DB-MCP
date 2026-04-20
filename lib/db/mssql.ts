@@ -62,9 +62,10 @@ function getDynamicPool(credentials: DatabaseCredentials['mssql']): Promise<sql.
 export async function queryMSSQL(
   sqlText: string,
   params: Record<string, unknown> = {},
-  credentials?: DatabaseCredentials['mssql']
+  credentials?: DatabaseCredentials['mssql'],
+  connectionName?: string
 ) {
-  const resolvedCredentials = credentials ?? resolveActiveCredentials('mssql').mssql;
+  const resolvedCredentials = credentials ?? resolveActiveCredentials('mssql', connectionName).mssql;
   const pool = await getDynamicPool(resolvedCredentials);
   let didFail = false;
 

@@ -71,6 +71,8 @@ GITHUB_SUMMARY_CONTEXT_LINES=3
 GITHUB_SUMMARY_PREVIEW_BYTES=2000
 UPSTASH_REDIS_REST_URL=https://your-upstash-instance.upstash.io
 UPSTASH_REDIS_REST_TOKEN=replace_with_upstash_token
+DATABASE_URL=postgresql://USER:PASSWORD@ep-xxxx.us-east-2.aws.neon.tech/neondb?sslmode=require
+APP_ACCOUNT_SECRET=replace_with_long_random_secret_min_16_chars
 MCP_CREDENTIAL_TTL_SECONDS=259200
 MCP_CACHE_L1=true
 MCP_CACHE_L1_MAX_ENTRIES=256
@@ -84,13 +86,26 @@ Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` to enable the shared
 
 Set `MCP_CREDENTIAL_TTL_SECONDS` to control how long issued personal access tokens stay valid. The default is 259200 seconds, which is 72 hours.
 
-For per-user credential mode, POST a JSON payload to `/api/credentials` with your database connections. The server stores the submitted credentials encrypted, returns a bearer token once, and uses that token to resolve the right connection set on later MCP requests.
+#### Account dashboard (email + permanent workspace name)
+
+Optional multi-user UI: register at `/register` with email, password, and workspace name; sign in at `/login`; manage databases at `/dashboard`.
+
+**Where data lives**
+
+- **Neon PostgreSQL** (`DATABASE_URL`, or `NEON_DATABASE_URL` / `APP_DATABASE_URL`): table `app_users` stores email, workspace username, password hash, encrypted MCP bearer (`mcp_token_cipher`), **`mcp_token_hash`** (SHA-256 hex for lookups), and **`credential_envelope_json`** — the same `{ expiresAt, payload }` blob as MCP uses (AES-GCM payload encrypted with the bearer token).
+- **Redis (Upstash)** — **cache + fast path** for that envelope (`mcp:credentials:v1:{sha256(token)}`), plus username reservations for anonymous tokens. On a **cache miss**, `/api/mcp` loads the envelope from Neon and **warms Redis** again.
+
+Anonymous `/api/credentials` tokens remain **Redis-only** (no Neon row).
+
+Set **`DATABASE_URL`** to your Neon connection string (pooler URL recommended for serverless). Set **`APP_ACCOUNT_SECRET`** (≥16 characters) for dashboard cookies and encrypting the MCP bearer at rest in Postgres.
+
+For per-user credential mode, POST a JSON payload to `/api/credentials` with a **unique `username`** (3–32 characters, start with a letter, then letters, digits, `-`, or `_`) and your database connections. The server stores the submitted credentials encrypted, returns a bearer token once, and uses that token to resolve the right connection set on later MCP requests. The username is reserved in Redis for the same TTL as the token; a duplicate username returns **409** until the previous reservation expires.
 
 Example payload:
 
 ```json
 {
-  "label": "Aditya local profile",
+  "username": "alice_dev",
   "defaultConnection": "main",
   "connections": [
     {
@@ -120,6 +135,11 @@ Example payload:
 ```
 
 Send the returned token as `Authorization: Bearer <token>` on `/api/mcp` requests. The token context expires after the configured TTL, so users need to re-issue a fresh token when it lapses.
+
+### Using this server from MCP clients (URL + token)
+
+- **HTTP-capable clients** (custom integration, some hosted UIs): configure **`https://<your-deployment>/api/mcp`** and send **`Authorization: Bearer <token>`** — two fields only.
+- **Cursor, Claude Desktop, Windsurf** (stdio MCP): they cannot open a raw HTTPS URL with headers. Users must run **[mcp-remote](https://www.npmjs.com/package/mcp-remote)** as the MCP command and pass the URL and header via `--header` and an env var. Copy **`examples/mcp-remote-cursor.json`**, replace **`REPLACE_WITH_YOUR_ORIGIN`** and **`REPLACE_WITH_TOKEN_FROM_POST_API_CREDENTIALS`**, and merge into your client config. See **`examples/README.md`** for paths and Windows notes.
 
 All database types can carry multiple named connections in one token. Pick a default connection so the server has a deterministic fallback when the agent does not send `connection`.
 

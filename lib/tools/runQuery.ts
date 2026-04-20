@@ -149,7 +149,7 @@ export async function runQuery(
     }
 
     if (db === 'mssql') {
-      const result = await queryMSSQL(executedQuery, {}, credentials?.mssql);
+      const result = await queryMSSQL(executedQuery, {}, credentials?.mssql, connection);
       return {
         success: true,
         data: {
@@ -166,7 +166,7 @@ export async function runQuery(
     }
 
     if (db === 'mysql') {
-      const rows = (await queryMySQL(executedQuery, credentials)) as unknown[];
+      const rows = (await queryMySQL(executedQuery, credentials, [], connection)) as unknown[];
       return {
         success: true,
         data: {
@@ -183,7 +183,7 @@ export async function runQuery(
     }
 
     if (db === 'sqlite') {
-      const rows = (await querySQLite(executedQuery, credentials)) as unknown[];
+      const rows = (await querySQLite(executedQuery, credentials, [], connection)) as unknown[];
       return {
         success: true,
         data: {

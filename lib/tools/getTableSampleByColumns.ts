@@ -78,7 +78,8 @@ export async function getTableSampleByColumns(
         `SELECT TOP (@rowLimit) ${selectList}
          FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}`,
         { rowLimit },
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {
@@ -101,7 +102,8 @@ export async function getTableSampleByColumns(
          FROM ${quoteIdentifier(db, table)}
          LIMIT ?`,
         credentials,
-        [rowLimit]
+        [rowLimit],
+        connection
       )) as Array<Record<string, unknown>>;
 
       return {
@@ -124,7 +126,8 @@ export async function getTableSampleByColumns(
          FROM ${quoteIdentifier(db, table)}
          LIMIT ?`,
         credentials,
-        [rowLimit]
+        [rowLimit],
+        connection
       )) as Array<Record<string, unknown>>;
 
       return {

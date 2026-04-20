@@ -85,7 +85,8 @@ export async function searchColumns(
            AND column_name LIKE @pattern
          ORDER BY table_name, ordinal_position`,
         { schemaName: schemaFilter, pattern: `%${search}%` },
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {
@@ -116,7 +117,8 @@ export async function searchColumns(
            AND COLUMN_NAME LIKE ?
          ORDER BY TABLE_NAME, ORDINAL_POSITION`,
         credentials,
-        [`%${search}%`]
+        [`%${search}%`],
+        connection
       )) as Array<{ schema_name: string; table_name: string; column_name: string; data_type: string; is_nullable: string }>;
 
       return {
@@ -136,7 +138,7 @@ export async function searchColumns(
     }
 
     if (db === 'sqlite') {
-      const tables = await getTablesSQLite(credentials);
+      const tables = await getTablesSQLite(credentials, connection);
       const matches: ColumnMatch[] = [];
 
       for (const table of tables) {
@@ -144,7 +146,7 @@ export async function searchColumns(
           break;
         }
 
-        const columns = (await querySQLite(`PRAGMA table_info(${quoteSqlite(table)})`, credentials)) as Array<{ name: string; type: string; notnull: number }>;
+        const columns = (await querySQLite(`PRAGMA table_info(${quoteSqlite(table)})`, credentials, [], connection)) as Array<{ name: string; type: string; notnull: number }>;
         for (const column of columns) {
           if (column.name.toLowerCase().includes(search.toLowerCase())) {
             matches.push({

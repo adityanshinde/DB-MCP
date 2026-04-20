@@ -60,7 +60,8 @@ export async function listStoredProcedures(
               ORDER BY SPECIFIC_SCHEMA, SPECIFIC_NAME
             `,
             {},
-            credentials?.mssql
+            credentials?.mssql,
+            connection
           );
 
           const rows = result.rows as StoredProcedureRow[];
@@ -81,7 +82,7 @@ export async function listStoredProcedures(
             ORDER BY ROUTINE_SCHEMA, ROUTINE_NAME
           `;
 
-          const result = (await queryMySQL(query, credentials)) as Array<{ ROUTINE_SCHEMA: string; ROUTINE_NAME: string }>;
+          const result = (await queryMySQL(query, credentials, [], connection)) as Array<{ ROUTINE_SCHEMA: string; ROUTINE_NAME: string }>;
 
           return {
             procedures: result.map((row) => ({

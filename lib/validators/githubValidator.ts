@@ -1,3 +1,4 @@
+import { getCredentialContext } from '@/lib/auth/credentials';
 import { CONFIG } from '@/lib/config';
 
 const GITHUB_REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -42,12 +43,39 @@ export function matchesGitHubRepositoryAllowlistEntry(repository: string, allowl
   return normalizedRepository === normalizedEntry;
 }
 
+/** Repos allowlist: per-credential (Advanced) when set, otherwise deployment env. */
+export function resolveEffectiveGithubAllowedRepos(): string[] {
+  const fromProfile = getCredentialContext()?.profile.github?.allowedRepos;
+  if (fromProfile?.length) {
+    return fromProfile;
+  }
+  return CONFIG.github.allowedRepos;
+}
+
+export function resolveEffectiveGithubAllowedOrgs(): string[] {
+  const fromProfile = getCredentialContext()?.profile.github?.allowedOrgs;
+  if (fromProfile?.length) {
+    return fromProfile;
+  }
+  return CONFIG.github.allowedOrgs;
+}
+
+export function resolveEffectiveGithubOrgName(): string {
+  const fromProfile = getCredentialContext()?.profile.github?.orgName?.trim();
+  if (fromProfile) {
+    return fromProfile;
+  }
+  return CONFIG.github.orgName.trim();
+}
+
 export function ensureAllowedGitHubRepository(repository: string): string {
   const normalized = normalizeGitHubRepository(repository).toLowerCase();
-  const allowedRepos = CONFIG.github.allowedRepos;
+  const allowedRepos = resolveEffectiveGithubAllowedRepos();
 
   if (allowedRepos.length === 0) {
-    throw new Error('GitHub repositories are not configured. Set GITHUB_ALLOWED_REPOS first.');
+    throw new Error(
+      'GitHub repositories are not configured. Add allowed repos in Advanced (token setup) or set GITHUB_ALLOWED_REPOS on the server.'
+    );
   }
 
   if (!allowedRepos.some((repo) => matchesGitHubRepositoryAllowlistEntry(normalized, repo))) {

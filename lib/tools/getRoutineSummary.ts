@@ -46,7 +46,8 @@ async function getRoutineRow(db: DBType, kind: RoutineKind, name: string, schema
        FROM information_schema.routines
        WHERE routine_type = @routineType AND routine_schema = @schemaName AND routine_name = @routineName`,
       { routineType: kind, schemaName: resolvedSchema, routineName: name },
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
     return (result.rows as Array<Record<string, unknown>>)[0] ?? null;
   }
@@ -61,7 +62,8 @@ async function getRoutineRow(db: DBType, kind: RoutineKind, name: string, schema
        FROM information_schema.routines
        WHERE routine_type = ? AND routine_schema = DATABASE() AND routine_name = ?`,
       credentials,
-      [kind, name]
+      [kind, name],
+      connection
     )) as Array<Record<string, unknown>>;
     return rows[0] ?? null;
   }
@@ -85,7 +87,8 @@ async function getParameters(db: DBType, name: string, schema?: string, credenti
        WHERE specific_schema = @schemaName AND specific_name = @routineName
        ORDER BY ordinal_position`,
       { schemaName: resolvedSchema, routineName: name },
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
     return result.rows as RoutineParameter[];
   }
@@ -100,7 +103,8 @@ async function getParameters(db: DBType, name: string, schema?: string, credenti
        WHERE specific_schema = DATABASE() AND specific_name = ?
        ORDER BY ordinal_position`,
       credentials,
-      [name]
+      [name],
+      connection
     )) as RoutineParameter[];
     return rows;
   }

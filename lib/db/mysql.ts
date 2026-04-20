@@ -40,8 +40,8 @@ function getDynamicPool(credentials: DatabaseCredentials): mysql.Pool {
   });
 }
 
-async function withPoolConnection<T>(credentials: DatabaseCredentials | undefined, work: (connection: mysql.PoolConnection) => Promise<T>): Promise<T> {
-  const resolvedCredentials = credentials ?? resolveActiveCredentials('mysql');
+async function withPoolConnection<T>(credentials: DatabaseCredentials | undefined, connectionName: string | undefined, work: (connection: mysql.PoolConnection) => Promise<T>): Promise<T> {
+  const resolvedCredentials = credentials ?? resolveActiveCredentials('mysql', connectionName);
   const pool = getDynamicPool(resolvedCredentials);
   let connection: mysql.PoolConnection | null = null;
 
@@ -63,18 +63,20 @@ async function withPoolConnection<T>(credentials: DatabaseCredentials | undefine
 export async function queryMySQL(
   query: string,
   credentials?: DatabaseCredentials,
-  params: unknown[] = []
+  params: unknown[] = [],
+  connectionName?: string
 ): Promise<unknown> {
-  return withPoolConnection(credentials, async (connection) => {
+  return withPoolConnection(credentials, connectionName, async (connection) => {
     const [rows] = await connection.query({ sql: query, timeout: CONFIG.app.queryTimeoutMs }, params);
     return rows;
   });
 }
 
 export async function getTablesMySQL(
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connectionName?: string
 ): Promise<string[]> {
-  return withPoolConnection(credentials, async (connection) => {
+  return withPoolConnection(credentials, connectionName, async (connection) => {
     const [rows] = await connection.query(
       'SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE()'
     );
@@ -85,9 +87,10 @@ export async function getTablesMySQL(
 
 export async function getSchemaMySQL(
   table: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connectionName?: string
 ): Promise<Array<{ name: string; type: string; nullable: boolean }>> {
-  return withPoolConnection(credentials, async (connection) => {
+  return withPoolConnection(credentials, connectionName, async (connection) => {
     const [rows] = await connection.query(
       'SELECT COLUMN_NAME as name, COLUMN_TYPE as type, IS_NULLABLE as nullable FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
       [table]
@@ -100,14 +103,15 @@ export async function getSchemaMySQL(
         nullable: row.nullable === 'YES'
       })
     );
-    });
+  });
 }
 
 export async function getRelationshipsMySQL(
   table?: string,
-  credentials?: DatabaseCredentials
+  credentials?: DatabaseCredentials,
+  connectionName?: string
 ): Promise<Array<{ constraint: string; table: string; column: string; referenced_table: string; referenced_column: string }>> {
-  return withPoolConnection(credentials, async (connection) => {
+  return withPoolConnection(credentials, connectionName, async (connection) => {
     let query = `
       SELECT 
         CONSTRAINT_NAME as constraint,

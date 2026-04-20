@@ -83,7 +83,8 @@ export async function searchViews(
            AND v.name LIKE @pattern
          ORDER BY sch.name, v.name`,
         params,
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {
@@ -105,7 +106,8 @@ export async function searchViews(
            AND TABLE_NAME LIKE ?
          ORDER BY TABLE_NAME`,
         credentials,
-        [`%${search}%`]
+        [`%${search}%`],
+        connection
       )) as Array<{ schema_name: string; view_name: string }>;
 
       return {
@@ -126,7 +128,8 @@ export async function searchViews(
            AND name LIKE ?
          ORDER BY name`,
         credentials,
-        [`%${search}%`]
+        [`%${search}%`],
+        connection
       )) as Array<{ view_name: string }>;
 
       return {

@@ -1,3 +1,4 @@
+import { getCredentialContext } from '@/lib/auth/credentials';
 import { CONFIG } from '@/lib/config';
 import { GITHUB_CACHE_TTLS, readThroughGitHubCache } from '@/lib/cache/githubCache';
 import { logMcpError } from '@/lib/runtime/observability';
@@ -124,9 +125,16 @@ function recordScope(scope?: { org?: string; repo?: string }): void {
 }
 
 function getGitHubToken(): string {
+  const userPat = getCredentialContext()?.profile.github?.pat?.trim();
+  if (userPat) {
+    return userPat;
+  }
+
   const token = CONFIG.github.pat.trim();
   if (!token) {
-    throw new Error('GitHub PAT is not configured. Set GITHUB_PAT in the environment.');
+    throw new Error(
+      'GitHub PAT is not configured. Paste a PAT under Advanced when generating your MCP token, or set GITHUB_PAT on the server.'
+    );
   }
 
   return token;

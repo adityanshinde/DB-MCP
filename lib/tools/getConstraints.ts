@@ -137,7 +137,8 @@ export async function getConstraints(
               schemaName: resolvedSchema,
               tableName: table ?? null
             },
-            credentials?.mssql
+            credentials?.mssql,
+            connection
           );
 
           return { constraints: result.rows as Array<Record<string, unknown>> };
@@ -166,20 +167,23 @@ export async function getConstraints(
                AND (? IS NULL OR tc.TABLE_NAME = ?)
              ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME`,
             credentials,
-            [table ?? null, table ?? null]
+            [table ?? null, table ?? null],
+            connection
           )) as Array<Record<string, unknown>>;
 
           return { constraints: rows };
         }
 
         if (db === 'sqlite') {
-          const tables = table ? [table] : await getTablesSQLite(credentials);
+          const tables = table ? [table] : await getTablesSQLite(credentials, connection);
           const constraints: Array<Record<string, unknown>> = [];
 
           for (const currentTable of tables) {
             const columns = (await querySQLite(
               `PRAGMA table_info(${quoteSqliteIdentifier(currentTable)})`,
-              credentials
+              credentials,
+              [],
+              connection
             )) as Array<{ name: string; pk: number }>;
 
             const primaryKeyColumns = columns
@@ -199,7 +203,9 @@ export async function getConstraints(
 
             const foreignKeys = (await querySQLite(
               `PRAGMA foreign_key_list(${quoteSqliteIdentifier(currentTable)})`,
-              credentials
+              credentials,
+              [],
+              connection
             )) as Array<{ id: number; seq: number; table: string; from: string; to: string }>;
 
             for (const foreignKey of foreignKeys) {
@@ -216,7 +222,9 @@ export async function getConstraints(
 
             const indexes = (await querySQLite(
               `PRAGMA index_list(${quoteSqliteIdentifier(currentTable)})`,
-              credentials
+              credentials,
+              [],
+              connection
             )) as Array<{ seq: number; name: string; unique: number; origin: string; partial: number }>;
 
             for (const indexRow of indexes || []) {
@@ -226,7 +234,9 @@ export async function getConstraints(
 
               const indexColumns = (await querySQLite(
                 `PRAGMA index_info(${quoteSqliteIdentifier(indexRow.name)})`,
-                credentials
+                credentials,
+                [],
+                connection
               )) as Array<{ seqno: number; cid: number; name: string | null }>;
 
               constraints.push({

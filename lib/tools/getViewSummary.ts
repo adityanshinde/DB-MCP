@@ -44,7 +44,8 @@ async function getColumns(db: DBType, view: string, schema?: string, credentials
        WHERE table_schema = @schemaName AND table_name = @viewName
        ORDER BY ordinal_position`,
       { schemaName: resolvedSchema, viewName: view },
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
     return result.rows as ColumnRow[];
   }
@@ -58,13 +59,14 @@ async function getColumns(db: DBType, view: string, schema?: string, credentials
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
        ORDER BY ORDINAL_POSITION`,
       credentials,
-      [view]
+      [view],
+      connection
     )) as ColumnRow[];
     return rows;
   }
 
   if (db === 'sqlite') {
-    const rows = (await querySQLite(`PRAGMA table_info(${quoteSqlite(view)})`, credentials)) as Array<{ name: string; type: string; notnull: number }>;
+    const rows = (await querySQLite(`PRAGMA table_info(${quoteSqlite(view)})`, credentials, [], connection)) as Array<{ name: string; type: string; notnull: number }>;
     return rows.map((row) => ({ name: row.name, type: row.type, nullable: row.notnull === 0 }));
   }
 
@@ -93,7 +95,8 @@ async function getDefinition(db: DBType, view: string, schema?: string, credenti
        INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
        WHERE s.name = @schemaName AND v.name = @viewName`,
       { schemaName: resolvedSchema, viewName: view },
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
     return String((result.rows[0] as { definition?: string | null } | undefined)?.definition ?? '');
   }
@@ -104,7 +107,8 @@ async function getDefinition(db: DBType, view: string, schema?: string, credenti
        FROM INFORMATION_SCHEMA.VIEWS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
       credentials,
-      [view]
+      [view],
+      connection
     )) as Array<{ definition: string | null }>;
     return rows[0]?.definition ?? '';
   }
@@ -115,7 +119,8 @@ async function getDefinition(db: DBType, view: string, schema?: string, credenti
        FROM sqlite_master
        WHERE type = 'view' AND name = ?`,
       credentials,
-      [view]
+      [view],
+      connection
     )) as Array<{ definition: string | null }>;
     return rows[0]?.definition ?? '';
   }

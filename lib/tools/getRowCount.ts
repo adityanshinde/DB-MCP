@@ -40,7 +40,8 @@ export async function getRowCount(
         `SELECT COUNT_BIG(*) AS row_count
          FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}`,
         {},
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {
@@ -58,7 +59,9 @@ export async function getRowCount(
       const rows = (await queryMySQL(
         `SELECT COUNT(*) AS row_count
          FROM ${quoteIdentifier(db, table)}`,
-        credentials
+        credentials,
+        [],
+        connection
       )) as Array<{ row_count: number | string }>;
 
       return {
@@ -76,7 +79,9 @@ export async function getRowCount(
       const rows = (await querySQLite(
         `SELECT COUNT(*) AS row_count
          FROM ${quoteIdentifier(db, table)}`,
-        credentials
+        credentials,
+        [],
+        connection
       )) as Array<{ row_count: number | string }>;
 
       return {

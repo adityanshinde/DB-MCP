@@ -12,6 +12,7 @@ type ConnectionSummary = {
 
 type ListConnectionsResult = {
   source: 'token';
+  username: string | null;
   default_connection: string | null;
   total: number;
   connections: ConnectionSummary[];
@@ -37,6 +38,7 @@ export async function listConnections(): Promise<ToolResponse<ListConnectionsRes
     success: true,
     data: {
       source: 'token',
+      username: summary.username,
       default_connection: summary.default_connection,
       total: summary.total,
       connections: summary.connections

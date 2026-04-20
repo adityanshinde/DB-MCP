@@ -58,7 +58,7 @@ export async function executeReadQuery(
     }
 
     if (db === 'mssql') {
-      const result = await queryMSSQL(executedQuery, {}, credentials?.mssql);
+      const result = await queryMSSQL(executedQuery, {}, credentials?.mssql, connection);
       logMcpEvent('tool.execute.success', { tool: 'db_execute_read_query', db, rowCount: result.rowCount });
       return {
         success: true,
@@ -76,7 +76,7 @@ export async function executeReadQuery(
     }
 
     if (db === 'mysql') {
-      const rows = (await queryMySQL(executedQuery, credentials)) as unknown[];
+      const rows = (await queryMySQL(executedQuery, credentials, [], connection)) as unknown[];
       logMcpEvent('tool.execute.success', { tool: 'db_execute_read_query', db, rowCount: rows.length });
       return {
         success: true,
@@ -94,7 +94,7 @@ export async function executeReadQuery(
     }
 
     if (db === 'sqlite') {
-      const rows = (await querySQLite(executedQuery, credentials)) as unknown[];
+      const rows = (await querySQLite(executedQuery, credentials, [], connection)) as unknown[];
       logMcpEvent('tool.execute.success', { tool: 'db_execute_read_query', db, rowCount: rows.length });
       return {
         success: true,

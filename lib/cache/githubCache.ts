@@ -1,3 +1,4 @@
+import { getCredentialContext } from '@/lib/auth/credentials';
 import { buildStableHash, readThroughCache, readThroughCacheDetailed } from '@/lib/cache/toolCache';
 
 type GitHubCacheOptions<T> = {
@@ -29,6 +30,11 @@ export const GITHUB_CACHE_TTLS = {
   pullRequestComments: 10 * 60
 } as const;
 
+function credentialCachePrefix(): string {
+  const hash = getCredentialContext()?.tokenHash;
+  return hash ? `u:${hash.slice(0, 24)}` : 'deploy';
+}
+
 function buildCacheKey(options: Pick<GitHubCacheOptions<unknown>, 'org' | 'repo' | 'branch' | 'tool' | 'path' | 'params'>): string {
   const orgPart = options.org?.trim().toLowerCase() || 'public';
   const repoPart = options.repo?.trim().toLowerCase() || '';
@@ -36,7 +42,7 @@ function buildCacheKey(options: Pick<GitHubCacheOptions<unknown>, 'org' | 'repo'
   const pathPart = options.path?.trim() || '';
   const paramsPart = buildStableHash(options.params ?? {});
 
-  return `github:${orgPart}:${repoPart}:${branchPart}:${options.tool}:${pathPart}:${paramsPart}`;
+  return `${credentialCachePrefix()}:github:${orgPart}:${repoPart}:${branchPart}:${options.tool}:${pathPart}:${paramsPart}`;
 }
 
 export async function readThroughGitHubCache<T>(options: GitHubCacheOptions<T>): Promise<T> {

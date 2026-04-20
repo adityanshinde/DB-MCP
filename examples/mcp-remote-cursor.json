@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "db-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "REPLACE_WITH_YOUR_ORIGIN/api/mcp",
+        "--header",
+        "Authorization:${DB_MCP_AUTH}"
+      ],
+      "env": {
+        "DB_MCP_AUTH": "Bearer REPLACE_WITH_TOKEN_FROM_POST_API_CREDENTIALS"
+      }
+    }
+  }
+}

@@ -108,7 +108,7 @@ export async function executeStoredProcedure(
 
     if (input.db === 'mssql') {
       const { sql, paramMap } = buildMssqlCall(schema, procedure, params);
-      const result = await queryMSSQL(sql, paramMap, credentials?.mssql);
+      const result = await queryMSSQL(sql, paramMap, credentials?.mssql, connection);
 
       return {
         success: true,
@@ -130,7 +130,7 @@ export async function executeStoredProcedure(
 
     if (input.db === 'mysql') {
       const callSql = buildMySqlCall(schema, procedure, params);
-      const rows = (await queryMySQL(callSql, credentials, params)) as unknown;
+      const rows = (await queryMySQL(callSql, credentials, params, connection)) as unknown;
       const rowArray = Array.isArray(rows) ? rows : [];
 
       return {

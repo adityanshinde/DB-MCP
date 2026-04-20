@@ -1,12 +1,13 @@
-import { CONFIG } from '@/lib/config';
-
 import {
   recordGitHubExcessiveRepoScan,
   recordGitHubRepoResolutionAttempt
 } from '@/lib/tools/github/githubClient';
 import {
   ensureAllowedGitHubRepository,
-  normalizeGitHubRepository
+  normalizeGitHubRepository,
+  resolveEffectiveGithubAllowedOrgs,
+  resolveEffectiveGithubAllowedRepos,
+  resolveEffectiveGithubOrgName
 } from '@/lib/validators/githubValidator';
 
 export type GitHubRepositoryResolution = {
@@ -16,9 +17,9 @@ export type GitHubRepositoryResolution = {
 };
 
 function normalizeOrgName(org?: string): string {
-  const resolved = org?.trim() || CONFIG.github.orgName.trim();
+  const resolved = org?.trim() || resolveEffectiveGithubOrgName();
   if (!resolved) {
-    throw new Error('GitHub organization is required. Set GITHUB_ORG_NAME or provide org explicitly.');
+    throw new Error('GitHub organization is required. Set GITHUB_ORG_NAME, add organization name in Advanced, or provide org explicitly.');
   }
 
   return resolved;
@@ -26,7 +27,7 @@ function normalizeOrgName(org?: string): string {
 
 function getAllowedReposForOrg(org: string): string[] {
   const normalizedOrg = org.toLowerCase();
-  return CONFIG.github.allowedRepos.filter((repo) => repo.toLowerCase().startsWith(`${normalizedOrg}/`));
+  return resolveEffectiveGithubAllowedRepos().filter((repo) => repo.toLowerCase().startsWith(`${normalizedOrg}/`));
 }
 
 function getExactAllowedReposForOrg(org: string): string[] {
@@ -34,13 +35,18 @@ function getExactAllowedReposForOrg(org: string): string[] {
 }
 
 export function getAllowedOrgList(): string[] {
-  const derivedOrgs = new Set<string>(CONFIG.github.allowedRepos.map((repo) => repo.split('/')[0]?.trim().toLowerCase()).filter(Boolean) as string[]);
+  const derivedOrgs = new Set<string>(
+    resolveEffectiveGithubAllowedRepos()
+      .map((repo) => repo.split('/')[0]?.trim().toLowerCase())
+      .filter(Boolean) as string[]
+  );
 
-  if (CONFIG.github.orgName.trim()) {
-    derivedOrgs.add(CONFIG.github.orgName.trim().toLowerCase());
+  const primaryOrg = resolveEffectiveGithubOrgName();
+  if (primaryOrg) {
+    derivedOrgs.add(primaryOrg.toLowerCase());
   }
 
-  for (const org of CONFIG.github.allowedOrgs) {
+  for (const org of resolveEffectiveGithubAllowedOrgs()) {
     if (org.trim()) {
       derivedOrgs.add(org.trim().toLowerCase());
     }

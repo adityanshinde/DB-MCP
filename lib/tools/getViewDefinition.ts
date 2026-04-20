@@ -64,7 +64,8 @@ export async function getViewDefinition(
           schemaName: resolvedSchema,
           viewName: view
         },
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       const row = result.rows[0] as { schema_name?: string; definition?: string | null } | undefined;
@@ -88,7 +89,8 @@ export async function getViewDefinition(
          WHERE TABLE_SCHEMA = DATABASE()
            AND TABLE_NAME = ?`,
         credentials,
-        [view]
+        [view],
+        connection
       )) as Array<{ schema_name: string; view_name: string; definition: string | null }>;
 
       const row = result[0] ?? null;
@@ -110,7 +112,8 @@ export async function getViewDefinition(
          WHERE type = 'view'
            AND name = ?`,
         credentials,
-        [view]
+        [view],
+        connection
       )) as Array<{ view_name: string; definition: string | null }>;
 
       const row = result[0] ?? null;

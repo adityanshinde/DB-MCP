@@ -1,100 +1,30 @@
 import { NextResponse } from 'next/server';
 
 import { createCredentialToken, getCredentialTtlSeconds } from '@/lib/auth/credentials';
-import type { DatabaseCredentials } from '@/lib/types';
+import {
+  parseTokenConnectionInput,
+  tokenInputToDatabaseCredentials,
+  type TokenConnectionInput
+} from '@/lib/credentials/tokenConnection';
+import { normalizeMcpUsername } from '@/lib/mcpUsername';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-type TokenConnectionInput =
-  | {
-      name: string;
-      label?: string;
-      isDefault?: boolean;
-      db: 'postgres';
-      credentials: {
-        host: string;
-        port: number;
-        username: string;
-        password: string;
-        database: string;
-      };
-    }
-  | {
-      name: string;
-      label?: string;
-      isDefault?: boolean;
-      db: 'mssql';
-      credentials: {
-        server: string;
-        username: string;
-        password: string;
-        database: string;
-        port?: number;
-      };
-    }
-  | {
-      name: string;
-      label?: string;
-      isDefault?: boolean;
-      db: 'mysql';
-      credentials: {
-        host: string;
-        port: number;
-        username: string;
-        password: string;
-        database: string;
-      };
-    }
-  | {
-      name: string;
-      label?: string;
-      isDefault?: boolean;
-      db: 'sqlite';
-      credentials: {
-        filePath: string;
-      };
-    };
 
 type GitHubProfileInput = {
   orgName?: string;
   allowedOrgs?: string[];
   allowedRepos?: string[];
+  /** Stored encrypted with the MCP bearer token; never returned in API responses */
+  pat?: string;
 };
 
 type GitHubProfileSummary = {
   org_name?: string;
   allowed_orgs: string[];
   allowed_repos: string[];
+  has_github_pat: boolean;
 };
-
-function toDatabaseCredentials(input: TokenConnectionInput): DatabaseCredentials {
-  if (input.db === 'postgres') {
-    return {
-      type: 'postgres',
-      postgres: input.credentials
-    };
-  }
-
-  if (input.db === 'mssql') {
-    return {
-      type: 'mssql',
-      mssql: input.credentials
-    };
-  }
-
-  if (input.db === 'mysql') {
-    return {
-      type: 'mysql',
-      mysql: input.credentials
-    };
-  }
-
-  return {
-    type: 'sqlite',
-    sqlite: input.credentials
-  };
-}
 
 function normalizeList(value: unknown): string[] {
   if (!Array.isArray(value)) {
@@ -108,7 +38,7 @@ function normalizeList(value: unknown): string[] {
 }
 
 function validateRequest(body: unknown): {
-  label?: string;
+  username: string;
   defaultConnection?: string;
   connections: TokenConnectionInput[];
   github?: GitHubProfileInput;
@@ -118,48 +48,27 @@ function validateRequest(body: unknown): {
   }
 
   const payload = body as {
+    username?: unknown;
     label?: unknown;
     defaultConnection?: unknown;
     connections?: unknown;
     github?: unknown;
   };
 
+  const usernameRaw =
+    (typeof payload.username === 'string' && payload.username.trim()) ||
+    (typeof payload.label === 'string' && payload.label.trim()) ||
+    '';
+
+  if (!usernameRaw || !normalizeMcpUsername(usernameRaw)) {
+    return null;
+  }
+
   if (!Array.isArray(payload.connections) || payload.connections.length === 0) {
     return null;
   }
 
-  const connections = payload.connections.filter((entry): entry is TokenConnectionInput => {
-    if (!entry || typeof entry !== 'object') {
-      return false;
-    }
-
-    const candidate = entry as { name?: unknown; db?: unknown; credentials?: unknown };
-    if (typeof candidate.name !== 'string' || typeof candidate.db !== 'string' || !candidate.credentials || typeof candidate.credentials !== 'object') {
-      return false;
-    }
-
-    if (candidate.db === 'postgres') {
-      const credentials = candidate.credentials as Record<string, unknown>;
-      return typeof credentials.host === 'string' && typeof credentials.port === 'number' && typeof credentials.username === 'string' && typeof credentials.password === 'string' && typeof credentials.database === 'string';
-    }
-
-    if (candidate.db === 'mssql') {
-      const credentials = candidate.credentials as Record<string, unknown>;
-      return typeof credentials.server === 'string' && typeof credentials.username === 'string' && typeof credentials.password === 'string' && typeof credentials.database === 'string' && (credentials.port === undefined || typeof credentials.port === 'number');
-    }
-
-    if (candidate.db === 'mysql') {
-      const credentials = candidate.credentials as Record<string, unknown>;
-      return typeof credentials.host === 'string' && typeof credentials.port === 'number' && typeof credentials.username === 'string' && typeof credentials.password === 'string' && typeof credentials.database === 'string';
-    }
-
-    if (candidate.db === 'sqlite') {
-      const credentials = candidate.credentials as Record<string, unknown>;
-      return typeof credentials.filePath === 'string';
-    }
-
-    return false;
-  });
+  const connections = payload.connections.map((entry) => parseTokenConnectionInput(entry)).filter((entry): entry is TokenConnectionInput => entry !== null);
 
   if (connections.length === 0) {
     return null;
@@ -167,16 +76,17 @@ function validateRequest(body: unknown): {
 
   let github: GitHubProfileInput | undefined;
   if (payload.github && typeof payload.github === 'object') {
-    const candidate = payload.github as { orgName?: unknown; allowedOrgs?: unknown; allowedRepos?: unknown };
+    const candidate = payload.github as { orgName?: unknown; allowedOrgs?: unknown; allowedRepos?: unknown; pat?: unknown };
     github = {
       orgName: typeof candidate.orgName === 'string' ? candidate.orgName.trim() || undefined : undefined,
       allowedOrgs: normalizeList(candidate.allowedOrgs),
-      allowedRepos: normalizeList(candidate.allowedRepos)
+      allowedRepos: normalizeList(candidate.allowedRepos),
+      pat: typeof candidate.pat === 'string' ? candidate.pat.trim() || undefined : undefined
     };
   }
 
   return {
-    label: typeof payload.label === 'string' ? payload.label.trim() || undefined : undefined,
+    username: usernameRaw,
     defaultConnection: typeof payload.defaultConnection === 'string' ? payload.defaultConnection.trim() || undefined : undefined,
     connections,
     github
@@ -203,19 +113,21 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Provide a non-empty connections array with named database credentials.',
+          error:
+            'Provide "username" (3–32 characters; start with a letter; letters, digits, hyphen, underscore only) and a non-empty connections array.',
           data: null
         },
         { status: 400 }
       );
     }
 
+    const normalizedUsername = normalizeMcpUsername(body.username)!;
     const normalizedDefaultConnection = normalizeDefaultConnection(body.connections, body.defaultConnection);
     const connections = body.connections.map((connection) => ({
       name: connection.name.trim(),
       label: connection.label?.trim() || undefined,
       type: connection.db,
-      credentials: toDatabaseCredentials(connection),
+      credentials: tokenInputToDatabaseCredentials(connection),
       isDefault: connection.name.trim() === normalizedDefaultConnection
     }));
 
@@ -223,12 +135,13 @@ export async function POST(request: Request) {
       ? {
           orgName: body.github.orgName?.trim() || undefined,
           allowedOrgs: body.github.allowedOrgs || [],
-          allowedRepos: body.github.allowedRepos || []
+          allowedRepos: body.github.allowedRepos || [],
+          pat: body.github.pat?.trim() || undefined
         }
       : undefined;
 
     const { token, expiresAt } = await createCredentialToken({
-      label: body.label,
+      username: normalizedUsername,
       defaultConnection: normalizedDefaultConnection,
       connections,
       github: normalizedGitHub
@@ -248,6 +161,7 @@ export async function POST(request: Request) {
         success: true,
         error: null,
         data: {
+          username: normalizedUsername,
           token,
           token_type: 'Bearer',
           expires_at: expiresAt,
@@ -259,7 +173,8 @@ export async function POST(request: Request) {
             ? ({
                 org_name: normalizedGitHub.orgName,
                 allowed_orgs: normalizedGitHub.allowedOrgs,
-                allowed_repos: normalizedGitHub.allowedRepos
+                allowed_repos: normalizedGitHub.allowedRepos,
+                has_github_pat: Boolean(normalizedGitHub.pat)
               } satisfies GitHubProfileSummary)
             : null
         }
@@ -267,13 +182,21 @@ export async function POST(request: Request) {
       { status: 201, headers: { 'Cache-Control': 'no-store, max-age=0' } }
     );
   } catch (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to create credential token.',
-        data: null
-      },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : 'Failed to create credential token.';
+    const lower = message.toLowerCase();
+
+    if (lower.includes('already taken')) {
+      return NextResponse.json({ success: false, error: message, data: null }, { status: 409 });
+    }
+
+    if (
+      lower.includes('invalid username') ||
+      lower.includes('username is required') ||
+      lower.includes('username required')
+    ) {
+      return NextResponse.json({ success: false, error: message, data: null }, { status: 400 });
+    }
+
+    return NextResponse.json({ success: false, error: message, data: null }, { status: 500 });
   }
 }

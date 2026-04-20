@@ -41,7 +41,8 @@ export async function listSchemas(
          WHERE name NOT IN ('sys', 'INFORMATION_SCHEMA')
          ORDER BY name`,
         {},
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       const allowedSchemas = new Set(CONFIG.app.allowedSchemas);
@@ -59,7 +60,9 @@ export async function listSchemas(
     if (db === 'mysql') {
       const result = (await queryMySQL(
         'SELECT DATABASE() AS schema_name',
-        credentials
+        credentials,
+        [],
+        connection
       )) as Array<{ schema_name: string | null }>;
 
       const schemas = result
@@ -74,7 +77,7 @@ export async function listSchemas(
     }
 
     if (db === 'sqlite') {
-      const result = (await querySQLite('PRAGMA database_list', credentials)) as Array<{ name: string }>;
+      const result = (await querySQLite('PRAGMA database_list', credentials, [], connection)) as Array<{ name: string }>;
       const schemas = result.map((row) => row.name).filter(Boolean);
 
       return {

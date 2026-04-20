@@ -82,7 +82,8 @@ export async function searchTables(
            AND tbl.name LIKE @pattern
          ORDER BY sch.name, tbl.name`,
         params,
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {
@@ -106,7 +107,8 @@ export async function searchTables(
            AND TABLE_NAME LIKE ?
          ORDER BY TABLE_NAME`,
         credentials,
-        [`%${search}%`]
+        [`%${search}%`],
+        connection
       )) as Array<{ table_name: string }>;
 
       return {
@@ -130,7 +132,8 @@ export async function searchTables(
            AND name LIKE ?
          ORDER BY name`,
         credentials,
-        [`%${search}%`]
+        [`%${search}%`],
+        connection
       )) as Array<{ table_name: string }>;
 
       return {

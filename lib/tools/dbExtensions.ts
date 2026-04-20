@@ -420,7 +420,8 @@ export async function getTableIndexesUsage(
               schemaName: resolvedSchema,
               tableName: table ?? null
             },
-            credentials?.mssql
+            credentials?.mssql,
+            connection
           );
 
           return {
@@ -450,7 +451,8 @@ export async function getTableIndexesUsage(
                AND (? IS NULL OR OBJECT_NAME = ?)
              ORDER BY OBJECT_NAME, INDEX_NAME`,
             credentials,
-            [table ?? null, table ?? null]
+            [table ?? null, table ?? null],
+            connection
           )) as Array<Record<string, unknown>>;
 
           return {
@@ -598,7 +600,7 @@ export async function sampleRowsByFilter(
       namedParams.rowLimit = rowLimit;
       const query = `SELECT TOP (@rowLimit) *
                      FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}${clause}${orderingClause}`;
-      const result = await queryMSSQL(query, namedParams, credentials?.mssql);
+      const result = await queryMSSQL(query, namedParams, credentials?.mssql, connection);
 
       return {
         success: true,
@@ -620,7 +622,7 @@ export async function sampleRowsByFilter(
       const query = `SELECT *
                      FROM ${quoteIdentifier(db, table)}${clause}${orderingClause}
                      LIMIT ?`;
-      const rows = (await queryMySQL(query, credentials, [...(params as unknown[]), rowLimit])) as unknown[];
+      const rows = (await queryMySQL(query, credentials, [...(params as unknown[]), rowLimit], connection)) as unknown[];
 
       return {
         success: true,
@@ -642,7 +644,7 @@ export async function sampleRowsByFilter(
       const query = `SELECT *
                      FROM ${quoteIdentifier(db, table)}${clause}${orderingClause}
                      LIMIT ?`;
-      const rows = (await querySQLite(query, credentials, [...(params as unknown[]), rowLimit])) as unknown[];
+      const rows = (await querySQLite(query, credentials, [...(params as unknown[]), rowLimit], connection)) as unknown[];
 
       return {
         success: true,

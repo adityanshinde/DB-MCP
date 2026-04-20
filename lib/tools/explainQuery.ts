@@ -42,7 +42,8 @@ export async function explainQuery(
          ${validated};
          SET SHOWPLAN_TEXT OFF;`,
         {},
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       const plan = result.rows.map((row) => JSON.stringify(row));
@@ -61,7 +62,9 @@ export async function explainQuery(
     if (db === 'mysql') {
       const rows = (await queryMySQL(
         `EXPLAIN ${validated}`,
-        credentials
+        credentials,
+        [],
+        connection
       )) as Array<Record<string, unknown>>;
 
       const plan = rows.map((row) => JSON.stringify(row));
@@ -80,7 +83,9 @@ export async function explainQuery(
     if (db === 'sqlite') {
       const rows = (await querySQLite(
         `EXPLAIN QUERY PLAN ${validated}`,
-        credentials
+        credentials,
+        [],
+        connection
       )) as Array<Record<string, unknown>>;
 
       const plan = rows.map((row) => JSON.stringify(row));

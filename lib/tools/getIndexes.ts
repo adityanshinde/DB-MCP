@@ -81,7 +81,8 @@ export async function getIndexes(
               schemaName: resolvedSchema,
               tableName: table ?? null
             },
-            credentials?.mssql
+            credentials?.mssql,
+            connection
           );
 
           return { indexes: result.rows as Array<Record<string, unknown>> };
@@ -103,26 +104,31 @@ export async function getIndexes(
                AND (? IS NULL OR TABLE_NAME = ?)
              ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`,
             credentials,
-            [table ?? null, table ?? null]
+            [table ?? null, table ?? null],
+            connection
           )) as Array<Record<string, unknown>>;
 
           return { indexes: rows };
         }
 
         if (db === 'sqlite') {
-          const tables = table ? [table] : await getTablesSQLite(credentials);
+          const tables = table ? [table] : await getTablesSQLite(credentials, connection);
           const indexes: Array<Record<string, unknown>> = [];
 
           for (const currentTable of tables) {
             const tableIndexes = (await querySQLite(
               `PRAGMA index_list(${quoteSqliteIdentifier(currentTable)})`,
-              credentials
+              credentials,
+              [],
+              connection
             )) as Array<{ seq: number; name: string; unique: number; origin: string; partial: number }>;
 
             for (const indexRow of tableIndexes || []) {
               const indexColumns = (await querySQLite(
                 `PRAGMA index_info(${quoteSqliteIdentifier(indexRow.name)})`,
-                credentials
+                credentials,
+                [],
+                connection
               )) as Array<{ seqno: number; cid: number; name: string | null }>;
 
               indexes.push({

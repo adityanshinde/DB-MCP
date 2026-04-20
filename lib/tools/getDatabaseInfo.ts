@@ -36,7 +36,8 @@ export async function getDatabaseInfo(
                 SCHEMA_NAME() AS current_schema,
                 @@VERSION AS version`,
         {},
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {
@@ -52,7 +53,9 @@ export async function getDatabaseInfo(
                 CURRENT_USER() AS current_user,
                 USER() AS session_user,
                 VERSION() AS version`,
-        credentials
+        credentials,
+        [],
+        connection
       )) as Array<Record<string, unknown>>;
 
       return {
@@ -63,8 +66,8 @@ export async function getDatabaseInfo(
     }
 
     if (db === 'sqlite') {
-      const databases = (await querySQLite('PRAGMA database_list', credentials)) as Array<Record<string, unknown>>;
-      const result = (await querySQLite('SELECT sqlite_version() AS version', credentials)) as Array<Record<string, unknown>>;
+      const databases = (await querySQLite('PRAGMA database_list', credentials, [], connection)) as Array<Record<string, unknown>>;
+      const result = (await querySQLite('SELECT sqlite_version() AS version', credentials, [], connection)) as Array<Record<string, unknown>>;
 
       return {
         success: true,

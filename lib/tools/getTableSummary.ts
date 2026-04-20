@@ -64,7 +64,8 @@ async function getColumns(db: DBType, table: string, schema?: string, credential
         schemaName: resolvedSchema,
         tableName: table
       },
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
 
     return result.rows as ColumnRow[];
@@ -81,14 +82,15 @@ async function getColumns(db: DBType, table: string, schema?: string, credential
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
        ORDER BY ORDINAL_POSITION`,
       credentials,
-      [table]
+      [table],
+      connection
     )) as Array<ColumnRow>;
 
     return rows;
   }
 
   if (db === 'sqlite') {
-    const rows = (await querySQLite(`PRAGMA table_info(${quoteSqlite(table)})`, credentials)) as Array<{
+    const rows = (await querySQLite(`PRAGMA table_info(${quoteSqlite(table)})`, credentials, [], connection)) as Array<{
       name: string;
       type: string;
       notnull: number;
@@ -141,7 +143,8 @@ async function getPrimaryKeyColumns(db: DBType, table: string, schema?: string, 
          AND tc.table_name = @tableName
        ORDER BY kcu.ordinal_position`,
       { schemaName: resolvedSchema, tableName: table },
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
 
     return (result.rows as Array<{ column_name: string }>).map((row) => row.column_name);
@@ -154,14 +157,15 @@ async function getPrimaryKeyColumns(db: DBType, table: string, schema?: string, 
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_KEY = 'PRI'
        ORDER BY ORDINAL_POSITION`,
       credentials,
-      [table]
+      [table],
+      connection
     )) as Array<{ column_name: string }>;
 
     return rows.map((row) => row.column_name);
   }
 
   if (db === 'sqlite') {
-    const rows = (await querySQLite(`PRAGMA table_info(${quoteSqlite(table)})`, credentials)) as Array<{ name: string; pk: number }>;
+    const rows = (await querySQLite(`PRAGMA table_info(${quoteSqlite(table)})`, credentials, [], connection)) as Array<{ name: string; pk: number }>;
     return rows
       .filter((row) => row.pk > 0)
       .sort((left, right) => left.pk - right.pk)

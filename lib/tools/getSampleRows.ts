@@ -44,7 +44,8 @@ export async function getSampleRows(
         `SELECT TOP (@rowLimit) *
          FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}`,
         { rowLimit },
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {
@@ -60,7 +61,8 @@ export async function getSampleRows(
          FROM ${quoteIdentifier(db, table)}
          LIMIT ?`,
         credentials,
-        [rowLimit]
+        [rowLimit],
+        connection
       )) as unknown[];
 
       return {
@@ -76,7 +78,8 @@ export async function getSampleRows(
          FROM ${quoteIdentifier(db, table)}
          LIMIT ?`,
         credentials,
-        [rowLimit]
+        [rowLimit],
+        connection
       )) as unknown[];
 
       return {

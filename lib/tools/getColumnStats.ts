@@ -53,7 +53,8 @@ async function getTotalRows(db: DBType, table: string, schema?: string, credenti
       `SELECT COUNT(*) AS count
        FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}`,
       {},
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
     return Number((result.rows[0] as { count?: number | string } | undefined)?.count ?? 0);
   }
@@ -62,7 +63,9 @@ async function getTotalRows(db: DBType, table: string, schema?: string, credenti
     const rows = (await queryMySQL(
       `SELECT COUNT(*) AS count
        FROM ${quoteIdentifier(db, table)}`,
-      credentials
+      credentials,
+      [],
+      connection
     )) as Array<{ count: number | string }>;
     return Number(rows[0]?.count ?? 0);
   }
@@ -71,7 +74,9 @@ async function getTotalRows(db: DBType, table: string, schema?: string, credenti
     const rows = (await querySQLite(
       `SELECT COUNT(*) AS count
        FROM ${quoteIdentifier(db, table)}`,
-      credentials
+      credentials,
+      [],
+      connection
     )) as Array<{ count: number | string }>;
     return Number(rows[0]?.count ?? 0);
   }
@@ -112,7 +117,8 @@ async function getColumnStat(db: DBType, table: string, column: string, schema?:
               COUNT(DISTINCT [${column.replace(/]/g, ']]')}]) AS distinct_rows
        FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}`,
       {},
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
     const row = result.rows[0] as { non_null_rows?: number | string; null_rows?: number | string; distinct_rows?: number | string } | undefined;
     return {
@@ -132,7 +138,9 @@ async function getColumnStat(db: DBType, table: string, column: string, schema?:
               COUNT(*) - COUNT(${quoteIdentifier(db, column)}) AS null_rows,
               COUNT(DISTINCT ${quoteIdentifier(db, column)}) AS distinct_rows
        FROM ${quoteIdentifier(db, table)}`,
-      credentials
+      credentials,
+      [],
+      connection
     )) as Array<{ non_null_rows: number | string; null_rows: number | string; distinct_rows: number | string }>;
 
     const row = rows[0] ?? { non_null_rows: 0, null_rows: 0, distinct_rows: 0 };
@@ -153,7 +161,9 @@ async function getColumnStat(db: DBType, table: string, column: string, schema?:
               COUNT(*) - COUNT(${quoteIdentifier(db, column)}) AS null_rows,
               COUNT(DISTINCT ${quoteIdentifier(db, column)}) AS distinct_rows
        FROM ${quoteIdentifier(db, table)}`,
-      credentials
+      credentials,
+      [],
+      connection
     )) as Array<{ non_null_rows: number | string; null_rows: number | string; distinct_rows: number | string }>;
 
     const row = rows[0] ?? { non_null_rows: 0, null_rows: 0, distinct_rows: 0 };

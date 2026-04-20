@@ -63,7 +63,8 @@ export async function getTableSchema(
               tableName: table,
               schemaName: resolvedSchema
             },
-            credentials?.mssql
+            credentials?.mssql,
+            connection
           );
 
           return {
@@ -74,7 +75,7 @@ export async function getTableSchema(
         }
 
         if (db === 'mysql') {
-          const columns = await getSchemaMySQL(table, credentials);
+          const columns = await getSchemaMySQL(table, credentials, connection);
           return {
             table,
             schema: 'default',
@@ -83,7 +84,7 @@ export async function getTableSchema(
         }
 
         if (db === 'sqlite') {
-          const columns = await getSchemaSQLite(table, credentials);
+          const columns = await getSchemaSQLite(table, credentials, connection);
           return {
             table,
             schema: 'default',

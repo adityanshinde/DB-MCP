@@ -85,7 +85,8 @@ export async function searchFunctions(
            AND routine_name LIKE @pattern
          ORDER BY routine_schema, routine_name`,
         params,
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {
@@ -113,7 +114,8 @@ export async function searchFunctions(
            AND routine_name LIKE ?
          ORDER BY routine_name`,
         credentials,
-        [`%${search}%`]
+        [`%${search}%`],
+        connection
       )) as Array<{ schema_name: string; function_name: string; return_type: string | null }>;
 
       return {
