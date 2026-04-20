@@ -43,6 +43,7 @@ import { getGitHubMetrics } from '@/lib/tools/github/githubClient';
 import { getViewSummary } from '@/lib/tools/getViewSummary';
 import { listSchemas } from '@/lib/tools/listSchemas';
 import { listPostgresConnections } from '@/lib/tools/listPostgresConnections';
+import { listMssqlConnections } from '@/lib/tools/listMssqlConnections';
 import { listStoredProcedures } from '@/lib/tools/listStoredProcedures';
 import { listTables } from '@/lib/tools/listTables';
 import { getRowCount } from '@/lib/tools/getRowCount';
@@ -491,6 +492,22 @@ export function createMcpServer(): McpServer {
       inputSchema: passthroughObject({})
     },
     async () => toTextResult(await listPostgresConnections())
+  );
+
+  server.registerTool(
+    'list_mssql_connections',
+    {
+      title: 'List MSSQL Connections',
+      description: 'List configured MSSQL connection aliases and indicate which one is the default. If only MSSQL_CONNECTION_STRING is set, the fallback alias is default.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({})
+    },
+    async () => toTextResult(await listMssqlConnections())
   );
 
   server.registerTool(

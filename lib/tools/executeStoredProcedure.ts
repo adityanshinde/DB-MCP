@@ -108,7 +108,7 @@ export async function executeStoredProcedure(
 
     if (input.db === 'mssql') {
       const { sql, paramMap } = buildMssqlCall(schema, procedure, params);
-      const result = await queryMSSQL(sql, paramMap, credentials?.mssql);
+      const result = await queryMSSQL(sql, paramMap, credentials?.mssql, connection);
 
       return {
         success: true,

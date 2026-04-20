@@ -64,7 +64,8 @@ async function getColumns(db: DBType, table: string, schema?: string, credential
         schemaName: resolvedSchema,
         tableName: table
       },
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
 
     return result.rows as ColumnRow[];
@@ -141,7 +142,8 @@ async function getPrimaryKeyColumns(db: DBType, table: string, schema?: string, 
          AND tc.table_name = @tableName
        ORDER BY kcu.ordinal_position`,
       { schemaName: resolvedSchema, tableName: table },
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
 
     return (result.rows as Array<{ column_name: string }>).map((row) => row.column_name);

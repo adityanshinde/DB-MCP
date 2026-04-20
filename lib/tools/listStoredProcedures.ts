@@ -60,7 +60,8 @@ export async function listStoredProcedures(
               ORDER BY SPECIFIC_SCHEMA, SPECIFIC_NAME
             `,
             {},
-            credentials?.mssql
+            credentials?.mssql,
+            connection
           );
 
           const rows = result.rows as StoredProcedureRow[];

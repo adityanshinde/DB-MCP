@@ -58,6 +58,8 @@ All runtime settings are controlled from one place only: `.env` and `lib/config.
 POSTGRES_URLS={"main":"postgresql://USER:PASSWORD@HOST:5432/MAIN_DB","reporting":"postgresql://USER:PASSWORD@HOST:5432/REPORTING_DB"}
 POSTGRES_DEFAULT=main
 POSTGRES_URL=postgresql://USER:PASSWORD@HOST:5432/MAIN_DB
+MSSQL_CONNECTIONS={"main":"Data Source=13.235.202.125;Initial Catalog=REPORT_DB_FROMKG;User ID=sa;Password=your_password;Encrypt=false;TrustServerCertificate=true","analytics":"Data Source=13.235.202.125;Initial Catalog=ANALYTICS_DB;User ID=sa;Password=your_password;Encrypt=false;TrustServerCertificate=true"}
+MSSQL_DEFAULT=main
 MSSQL_CONNECTION_STRING=Data Source=13.235.202.125;Initial Catalog=REPORT_DB_FROMKG;User ID=sa;Password=your_password;Encrypt=false;TrustServerCertificate=true
 GITHUB_PAT=replace_with_github_pat
 GITHUB_ORG_NAME=myorg
@@ -79,6 +81,8 @@ SQLITE_ALLOWED_DIR=C:\path\to\allowed\sqlite\dir
 
 Set `POSTGRES_URLS` to a JSON object of named connections when you need more than one Postgres database from the same MCP server. Pass the matching `connection` name when calling a Postgres tool; if you omit it, `POSTGRES_DEFAULT` is used. `POSTGRES_URL` still works as a backward-compatible single-database fallback.
 
+Set `MSSQL_CONNECTIONS` to a JSON object of named connections when you need more than one MSSQL database from the same MCP server. Pass the matching `connection` name when calling an MSSQL tool; if you omit it, `MSSQL_DEFAULT` is used. `MSSQL_CONNECTION_STRING` still works as a backward-compatible single-database fallback.
+
 Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` to enable the shared L2 cache. `MCP_CACHE_L1=true` keeps the optional in-memory L1 cache on for warm instances.
 
 Set `GITHUB_PAT`, `GITHUB_ORG_NAME`, and `GITHUB_ALLOWED_REPOS` to enable the read-only GitHub tools. The allowlist accepts exact `owner/repo` entries and org-wide `owner/*` patterns. `GITHUB_ALLOWED_ORGS` lets you restrict org-level listing. `GITHUB_MAX_FILE_SIZE_BYTES` keeps file fetches bounded, `GITHUB_TREE_MAX_DEPTH` limits repository tree traversal, `GITHUB_ORG_REPO_PAGE_SIZE` bounds org listing pages, and `GITHUB_SUMMARY_CONTEXT_LINES` / `GITHUB_SUMMARY_PREVIEW_BYTES` keep summaries compact.
@@ -88,8 +92,8 @@ Set `GITHUB_PAT`, `GITHUB_ORG_NAME`, and `GITHUB_ALLOWED_REPOS` to enable the re
 The file `lib/config.ts` contains all application settings used by the server.
 It defines:
 
-- PostgreSQL connection string
-- MSSQL connection string
+- PostgreSQL connection string or named connection map
+- MSSQL connection string or named connection map
 - max row limit for query execution
 - allowed schemas
 
@@ -324,7 +328,7 @@ On failure:
 ## Performance notes
 
 - PostgreSQL uses a persistent `pg.Pool`
-- MSSQL uses a cached `ConnectionPool`
+- MSSQL uses cached `ConnectionPool` instances per connection alias
 - connections are reused across requests
 - imports are kept lightweight
 

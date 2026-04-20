@@ -3,7 +3,7 @@ import sql from 'mssql';
 import { CONFIG } from '@/lib/config';
 import type { DatabaseCredentials } from '@/lib/types';
 
-let poolPromise: Promise<sql.ConnectionPool> | null = null;
+const pools = new Map<string, Promise<sql.ConnectionPool>>();
 
 function logMssqlEvent(message: string, error?: unknown): void {
   if (error) {
@@ -14,26 +14,58 @@ function logMssqlEvent(message: string, error?: unknown): void {
   console.info(`[mssql] ${message}`);
 }
 
-function createStaticPool(): Promise<sql.ConnectionPool> {
-  if (CONFIG.mssql.connectionString.trim()) {
-    const connectionPool = new sql.ConnectionPool(CONFIG.mssql.connectionString);
+function normalizeConnectionName(connection?: string): string {
+  return connection?.trim() || CONFIG.mssql.defaultConnection || 'default';
+}
+
+function getConfiguredConnectionString(connection?: string): string {
+  const connectionName = normalizeConnectionName(connection);
+  const url = CONFIG.mssql.connections[connectionName] || (connectionName === 'default' ? CONFIG.mssql.connectionString : '');
+
+  if (!url) {
+    const availableConnections = Object.keys(CONFIG.mssql.connections);
+    throw new Error(
+      availableConnections.length > 0
+        ? `Unknown MSSQL connection "${connectionName}". Available connections: ${availableConnections.join(', ')}.`
+        : 'MSSQL_CONNECTIONS or MSSQL_CONNECTION_STRING is not configured.'
+    );
+  }
+
+  return url;
+}
+
+function createStaticPool(connection?: string): Promise<sql.ConnectionPool> {
+  const connectionName = normalizeConnectionName(connection);
+  const connectionString = getConfiguredConnectionString(connectionName);
+
+  if (connectionString.trim()) {
+    const connectionPool = new sql.ConnectionPool(connectionString);
     connectionPool.on('error', (error) => {
-      logMssqlEvent('pool error observed', error);
+      logMssqlEvent(`pool error observed for ${connectionName}`, error);
     });
 
-    logMssqlEvent('static pool created');
+    logMssqlEvent(`static pool created for ${connectionName}`);
     return connectionPool.connect();
   }
 
-  throw new Error('MSSQL credentials are not fully configured. Set MSSQL_CONNECTION_STRING.');
+  throw new Error('MSSQL credentials are not fully configured. Set MSSQL_CONNECTIONS or MSSQL_CONNECTION_STRING.');
 }
 
-function getPool(): Promise<sql.ConnectionPool> {
-  if (!poolPromise) {
-    poolPromise = createStaticPool();
+function getPool(connection?: string): Promise<sql.ConnectionPool> {
+  const connectionName = normalizeConnectionName(connection);
+  const existing = pools.get(connectionName);
+
+  if (existing) {
+    return existing;
   }
 
-  return poolPromise as Promise<sql.ConnectionPool>;
+  const poolPromise = createStaticPool(connectionName).catch((error) => {
+    pools.delete(connectionName);
+    throw error;
+  });
+
+  pools.set(connectionName, poolPromise);
+  return poolPromise;
 }
 
 function getDynamicPool(credentials: DatabaseCredentials['mssql']): Promise<sql.ConnectionPool> {
@@ -69,10 +101,11 @@ function getDynamicPool(credentials: DatabaseCredentials['mssql']): Promise<sql.
 export async function queryMSSQL(
   sqlText: string,
   params: Record<string, unknown> = {},
-  credentials?: DatabaseCredentials['mssql']
+  credentials?: DatabaseCredentials['mssql'],
+  connection?: string
 ) {
   const isDynamic = Boolean(credentials);
-  const pool = credentials ? await getDynamicPool(credentials) : await getPool();
+  const pool = credentials ? await getDynamicPool(credentials) : await getPool(connection);
   let didFail = false;
 
   try {

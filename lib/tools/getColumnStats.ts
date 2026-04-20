@@ -53,7 +53,8 @@ async function getTotalRows(db: DBType, table: string, schema?: string, credenti
       `SELECT COUNT(*) AS count
        FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}`,
       {},
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
     return Number((result.rows[0] as { count?: number | string } | undefined)?.count ?? 0);
   }
@@ -112,7 +113,8 @@ async function getColumnStat(db: DBType, table: string, column: string, schema?:
               COUNT(DISTINCT [${column.replace(/]/g, ']]')}]) AS distinct_rows
        FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}`,
       {},
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
     const row = result.rows[0] as { non_null_rows?: number | string; null_rows?: number | string; distinct_rows?: number | string } | undefined;
     return {

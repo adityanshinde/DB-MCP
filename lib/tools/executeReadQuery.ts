@@ -58,7 +58,7 @@ export async function executeReadQuery(
     }
 
     if (db === 'mssql') {
-      const result = await queryMSSQL(executedQuery, {}, credentials?.mssql);
+      const result = await queryMSSQL(executedQuery, {}, credentials?.mssql, connection);
       logMcpEvent('tool.execute.success', { tool: 'db_execute_read_query', db, rowCount: result.rowCount });
       return {
         success: true,

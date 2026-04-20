@@ -40,7 +40,8 @@ export async function getRowCount(
         `SELECT COUNT_BIG(*) AS row_count
          FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}`,
         {},
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {

@@ -87,7 +87,8 @@ export async function getRelationships(
               schemaName: resolvedSchema,
               tableName: table ?? null
             },
-            credentials?.mssql
+            credentials?.mssql,
+            connection
           );
 
           return { relationships: result.rows };

@@ -78,7 +78,8 @@ export async function getTableSampleByColumns(
         `SELECT TOP (@rowLimit) ${selectList}
          FROM ${quoteIdentifier(db, resolvedSchema)}.${quoteIdentifier(db, table)}`,
         { rowLimit },
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {

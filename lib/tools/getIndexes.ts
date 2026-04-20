@@ -81,7 +81,8 @@ export async function getIndexes(
               schemaName: resolvedSchema,
               tableName: table ?? null
             },
-            credentials?.mssql
+            credentials?.mssql,
+            connection
           );
 
           return { indexes: result.rows as Array<Record<string, unknown>> };

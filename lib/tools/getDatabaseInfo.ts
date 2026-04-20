@@ -36,7 +36,8 @@ export async function getDatabaseInfo(
                 SCHEMA_NAME() AS current_schema,
                 @@VERSION AS version`,
         {},
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {

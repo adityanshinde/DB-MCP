@@ -34,12 +34,30 @@ function resolveDefaultPostgresConnection(connections: Record<string, string>): 
   return firstConnection || 'default';
 }
 
+function resolveDefaultMssqlConnection(connections: Record<string, string>): string {
+  const explicit = process.env.MSSQL_DEFAULT?.trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  const firstConnection = Object.keys(connections)[0];
+  return firstConnection || 'default';
+}
+
 const legacyPostgresUrl = process.env.POSTGRES_URL?.trim() || '';
 const parsedPostgresConnections = parseJsonRecord(process.env.POSTGRES_URLS);
 const postgresConnections = Object.keys(parsedPostgresConnections).length > 0
   ? parsedPostgresConnections
   : legacyPostgresUrl
     ? { default: legacyPostgresUrl }
+    : {};
+
+const legacyMssqlConnectionString = process.env.MSSQL_CONNECTION_STRING?.trim() || '';
+const parsedMssqlConnections = parseJsonRecord(process.env.MSSQL_CONNECTIONS);
+const mssqlConnections = Object.keys(parsedMssqlConnections).length > 0
+  ? parsedMssqlConnections
+  : legacyMssqlConnectionString
+    ? { default: legacyMssqlConnectionString }
     : {};
 
 export const CONFIG = {
@@ -49,7 +67,9 @@ export const CONFIG = {
     connections: postgresConnections
   },
   mssql: {
-    connectionString: process.env.MSSQL_CONNECTION_STRING || '',
+    connectionString: legacyMssqlConnectionString,
+    defaultConnection: resolveDefaultMssqlConnection(mssqlConnections),
+    connections: mssqlConnections,
     options: {
       encrypt: true,
       trustServerCertificate: false

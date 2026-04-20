@@ -83,7 +83,8 @@ export async function searchProcedures(
            AND routine_name LIKE @pattern
          ORDER BY routine_schema, routine_name`,
         params,
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {

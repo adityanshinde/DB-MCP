@@ -44,7 +44,8 @@ async function getColumns(db: DBType, view: string, schema?: string, credentials
        WHERE table_schema = @schemaName AND table_name = @viewName
        ORDER BY ordinal_position`,
       { schemaName: resolvedSchema, viewName: view },
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
     return result.rows as ColumnRow[];
   }
@@ -93,7 +94,8 @@ async function getDefinition(db: DBType, view: string, schema?: string, credenti
        INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
        WHERE s.name = @schemaName AND v.name = @viewName`,
       { schemaName: resolvedSchema, viewName: view },
-      credentials?.mssql
+      credentials?.mssql,
+      connection
     );
     return String((result.rows[0] as { definition?: string | null } | undefined)?.definition ?? '');
   }

@@ -63,7 +63,8 @@ export async function getTableSchema(
               tableName: table,
               schemaName: resolvedSchema
             },
-            credentials?.mssql
+            credentials?.mssql,
+            connection
           );
 
           return {

@@ -25,7 +25,8 @@ export async function listTables(db: DBType, credentials?: DatabaseCredentials, 
       const result = await queryMSSQL(
         "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME",
         {},
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       const rows = result.rows as Array<{ TABLE_NAME: string }>;

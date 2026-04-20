@@ -3,6 +3,7 @@ export type DBType = 'postgres' | 'mssql' | 'mysql' | 'sqlite';
 export type ToolName =
   | 'list_schemas'
   | 'list_postgres_connections'
+  | 'list_mssql_connections'
   | 'get_database_info'
   | 'run_query'
   | 'db_execute_read_query'
@@ -65,6 +66,8 @@ export type RunQueryInput = {
 } & PostgresConnectionInput;
 
 export type ListPostgresConnectionsInput = Record<string, never>;
+
+export type ListMssqlConnectionsInput = Record<string, never>;
 
 export type ExecuteReadQueryInput = RunQueryInput;
 
@@ -460,6 +463,7 @@ export type DatabaseCredentials = {
 export type ToolInputMap = {
   list_schemas: ListSchemasInput;
   list_postgres_connections: ListPostgresConnectionsInput;
+  list_mssql_connections: ListMssqlConnectionsInput;
   get_database_info: GetDatabaseInfoInput;
   run_query: RunQueryInput;
   'db_execute_read_query': ExecuteReadQueryInput;

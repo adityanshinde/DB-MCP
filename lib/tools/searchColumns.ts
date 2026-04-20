@@ -85,7 +85,8 @@ export async function searchColumns(
            AND column_name LIKE @pattern
          ORDER BY table_name, ordinal_position`,
         { schemaName: schemaFilter, pattern: `%${search}%` },
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {

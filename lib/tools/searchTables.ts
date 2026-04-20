@@ -82,7 +82,8 @@ export async function searchTables(
            AND tbl.name LIKE @pattern
          ORDER BY sch.name, tbl.name`,
         params,
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {

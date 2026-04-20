@@ -83,7 +83,8 @@ export async function searchViews(
            AND v.name LIKE @pattern
          ORDER BY sch.name, v.name`,
         params,
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       return {

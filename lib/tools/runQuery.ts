@@ -149,7 +149,7 @@ export async function runQuery(
     }
 
     if (db === 'mssql') {
-      const result = await queryMSSQL(executedQuery, {}, credentials?.mssql);
+      const result = await queryMSSQL(executedQuery, {}, credentials?.mssql, connection);
       return {
         success: true,
         data: {

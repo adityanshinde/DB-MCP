@@ -42,7 +42,8 @@ export async function explainQuery(
          ${validated};
          SET SHOWPLAN_TEXT OFF;`,
         {},
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       const plan = result.rows.map((row) => JSON.stringify(row));

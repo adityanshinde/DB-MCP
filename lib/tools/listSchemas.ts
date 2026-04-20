@@ -41,7 +41,8 @@ export async function listSchemas(
          WHERE name NOT IN ('sys', 'INFORMATION_SCHEMA')
          ORDER BY name`,
         {},
-        credentials?.mssql
+        credentials?.mssql,
+        connection
       );
 
       const allowedSchemas = new Set(CONFIG.app.allowedSchemas);

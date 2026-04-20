@@ -137,7 +137,8 @@ export async function getConstraints(
               schemaName: resolvedSchema,
               tableName: table ?? null
             },
-            credentials?.mssql
+            credentials?.mssql,
+            connection
           );
 
           return { constraints: result.rows as Array<Record<string, unknown>> };
