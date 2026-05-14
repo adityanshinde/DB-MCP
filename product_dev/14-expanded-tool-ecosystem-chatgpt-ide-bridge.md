@@ -185,6 +185,103 @@ DB-MCP currently has ~28 database tools + 15 GitHub tools. The MCP ecosystem has
 
 ---
 
+### 1.11 OS Integration & Desktop Automation Tools
+
+**Why**: End-to-end workflows often require OS-level actions — launching apps, sending notifications, exporting to Excel, managing processes.
+
+**Reference**: `github.com/CursorTouch/Windows-MCP` — Production-ready MCP server for Windows OS integration.
+
+#### Windows-MCP Architecture (Reference Model)
+
+**Tech Stack**:
+- Python 3.13+ with fastmcp framework
+- pywin32 + comtypes for Windows API access
+- dxcam for screenshots
+- PowerShell executor for shell commands
+- UI Automation (UIA) for element detection
+
+**Key Innovation: Label-to-Coordinate Resolution**
+Instead of hard-coded coordinates, agents reference UI elements by label (extracted from UI Automation tree):
+
+```python
+# Agent says: "Click the Submit button"
+# Windows-MCP resolves "Submit" → [x, y] coordinates
+# Then performs the click
+```
+
+This is similar to DOM selectors for web automation, but for native Windows UI.
+
+**Core Tools** (17 total):
+| Tool | Purpose |
+|------|---------|
+| `Click` | Mouse clicks at coordinates or UI element labels |
+| `Type` | Type text at coordinates or UI elements |
+| `Scroll` | Scroll vertically/horizontally |
+| `Move` | Move mouse or drag |
+| `Shortcut` | Keyboard shortcuts (Ctrl+c, Alt+Tab) |
+| `Wait` | Pause execution |
+| `Screenshot` | Fast desktop capture (cursor, windows, image) |
+| `Snapshot` | Full desktop state with UI element IDs and DOM extraction |
+| `App` | Launch apps, resize/move windows, switch apps |
+| `Shell` | Execute PowerShell commands |
+| `Scrape` | Scrape webpages for information |
+| `MultiSelect` | Select multiple items with bulk label-to-coordinate resolution |
+| `MultiEdit` | Enter text into multiple fields simultaneously |
+| `Clipboard` | Read/set clipboard |
+| `Process` | List/terminate processes |
+| `Notification` | Send Windows toast notifications |
+| `Registry` | Read/write/delete registry values |
+
+**Architecture Pattern**:
+```
+src/windows_mcp/
+├── tools/           # MCP tool implementations
+│   ├── input.py     # Click, Type, Scroll, Move, Shortcut, Wait
+│   ├── snapshot.py  # Screenshot, Snapshot
+│   ├── app.py       # App control
+│   └── shell.py     # PowerShell execution
+├── uia/             # UI Automation layer (element detection)
+├── desktop/         # Desktop state management
+├── tree/            # UI tree traversal
+└── infrastructure/  # Analytics, validation
+```
+
+**Security Model**:
+- ⚠️ Full system access — can perform irreversible operations
+- IP allowlist, tool selection, TLS/HTTPS, OAuth 2.0 + PKCE
+- SSRF protection
+- Config file (`~/.windows-mcp/config.toml`)
+- **Recommendation**: Use only with trusted LLM clients
+
+**Complementarity with DB-MCP**:
+DB-MCP and Windows-MCP solve different problems and work together seamlessly:
+
+| | **DB-MCP** | **Windows-MCP** |
+|---|------------|-----------------|
+| **Scope** | Database access + GitHub code | Windows OS automation |
+| **Platform** | Cross-platform | Windows only |
+| **Risk Level** | Low (read-only DB queries) | High (full OS access) |
+| **Use Case** | Data analysis, code research | Desktop automation, QA testing |
+
+**End-to-End Workflow Example**:
+```
+1. Agent uses Windows-MCP to open SQL Server Management Studio
+2. Agent uses DB-MCP to run queries and analyze results
+3. Agent uses Windows-MCP to export results to Excel
+4. Agent uses Windows-MCP to send notification with report
+```
+
+**Future OS Integration Reference**:
+If DB-MCP ever needs OS integration (e.g., for Windows-specific deployments), Windows-MCP's architecture is a proven model:
+- UIA for element detection (cross-platform equivalent: Accessibility APIs)
+- Label-to-coordinate resolution for flexible automation
+- PowerShell executor (cross-platform equivalent: subprocess/shell)
+- Modular tool registration pattern
+
+**Status**: Windows-MCP is v0.7.4 (beta), actively maintained, production-ready for Windows environments.
+
+---
+
 ## 2. The ChatGPT ↔ IDE Bridge Problem
 
 ### 2.1 Problem Statement

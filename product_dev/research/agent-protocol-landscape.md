@@ -428,3 +428,34 @@ From the OpenClaw community discussion (#98):
 ## Key Takeaway
 
 > **DB-MCP's strategy: MCP for tools (done), A2A for agent delegation (next), ACP for editor integration (monitor). Everything else is noise. No protocol is a threat — they all need rich data, and DB-MCP is the best at providing it.**
+
+---
+
+## Appendix: OS Integration Reference — Windows-MCP
+
+**Repository**: `github.com/CursorTouch/Windows-MCP`
+
+**What It Is**: Production-ready MCP server for Windows OS integration. Enables agents to perform desktop automation (click, type, scroll), app control, PowerShell execution, registry operations, and web scraping.
+
+**Key Innovation**: Label-to-coordinate resolution — agents reference UI elements by label (extracted from UI Automation tree) instead of hard-coded coordinates.
+
+**Complementarity with DB-MCP**:
+- DB-MCP provides data (database queries, GitHub code)
+- Windows-MCP provides OS control (launch apps, export to Excel, send notifications)
+- Together they enable end-to-end workflows:
+  ```
+  1. Agent uses Windows-MCP to open SQL Server Management Studio
+  2. Agent uses DB-MCP to run queries and analyze results
+  3. Agent uses Windows-MCP to export results to Excel
+  4. Agent uses Windows-MCP to send notification with report
+  ```
+
+**Reference Architecture**: If DB-MCP ever needs OS integration, Windows-MCP's architecture is a proven model:
+- UIA for element detection (cross-platform equivalent: Accessibility APIs)
+- Label-to-coordinate resolution for flexible automation
+- PowerShell executor (cross-platform equivalent: subprocess/shell)
+- Modular tool registration pattern
+
+**Status**: v0.7.4 (beta), actively maintained, production-ready for Windows environments.
+
+**Documented in**: `product_dev/14-expanded-tool-ecosystem-chatgpt-ide-bridge.md` (Section 1.11)
