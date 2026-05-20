@@ -24,6 +24,59 @@ function parseJsonRecord(value: string | undefined): Record<string, string> {
   }
 }
 
+type PostgresServerMap = Record<string, Record<string, string>>;
+
+function parsePostgresConnections(value: string | undefined): { connections: Record<string, string>; servers: PostgresServerMap } {
+  if (!value?.trim()) {
+    return { connections: {}, servers: {} };
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const connections: Record<string, string> = {};
+    const servers: PostgresServerMap = {};
+
+    for (const [key, entry] of Object.entries(parsed)) {
+      const trimmedKey = key.trim();
+      if (!trimmedKey) {
+        continue;
+      }
+
+      if (typeof entry === 'string') {
+        const url = entry.trim();
+        if (url) {
+          connections[trimmedKey] = url;
+        }
+        continue;
+      }
+
+      if (entry && typeof entry === 'object') {
+        const dbEntries = Object.entries(entry as Record<string, unknown>).reduce<Record<string, string>>((accumulator, [dbName, dbUrl]) => {
+          const trimmedDb = dbName.trim();
+          if (typeof dbUrl === 'string' && trimmedDb) {
+            const url = dbUrl.trim();
+            if (url) {
+              accumulator[trimmedDb] = url;
+            }
+          }
+          return accumulator;
+        }, {});
+
+        if (Object.keys(dbEntries).length > 0) {
+          servers[trimmedKey] = dbEntries;
+          for (const [dbName, dbUrl] of Object.entries(dbEntries)) {
+            connections[`${trimmedKey}.${dbName}`] = dbUrl;
+          }
+        }
+      }
+    }
+
+    return { connections, servers };
+  } catch {
+    return { connections: {}, servers: {} };
+  }
+}
+
 function resolveDefaultPostgresConnection(connections: Record<string, string>): string {
   const explicit = process.env.POSTGRES_DEFAULT?.trim();
   if (explicit) {
@@ -45,12 +98,15 @@ function resolveDefaultMssqlConnection(connections: Record<string, string>): str
 }
 
 const legacyPostgresUrl = process.env.POSTGRES_URL?.trim() || '';
-const parsedPostgresConnections = parseJsonRecord(process.env.POSTGRES_URLS);
-const postgresConnections = Object.keys(parsedPostgresConnections).length > 0
-  ? parsedPostgresConnections
+const parsedPostgres = parsePostgresConnections(process.env.POSTGRES_URLS);
+const postgresConnections = Object.keys(parsedPostgres.connections).length > 0
+  ? parsedPostgres.connections
   : legacyPostgresUrl
     ? { default: legacyPostgresUrl }
     : {};
+const postgresServers = Object.keys(parsedPostgres.servers).length > 0
+  ? parsedPostgres.servers
+  : {};
 
 const legacyMssqlConnectionString = process.env.MSSQL_CONNECTION_STRING?.trim() || '';
 const parsedMssqlConnections = parseJsonRecord(process.env.MSSQL_CONNECTIONS);
@@ -64,7 +120,8 @@ export const CONFIG = {
   postgres: {
     url: legacyPostgresUrl,
     defaultConnection: resolveDefaultPostgresConnection(postgresConnections),
-    connections: postgresConnections
+    connections: postgresConnections,
+    servers: postgresServers
   },
   mssql: {
     connectionString: legacyMssqlConnectionString,

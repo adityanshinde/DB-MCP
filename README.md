@@ -79,7 +79,12 @@ MCP_UI_ORIGIN=https://your-allowed-ui.example.com
 SQLITE_ALLOWED_DIR=C:\path\to\allowed\sqlite\dir
 ```
 
-Set `POSTGRES_URLS` to a JSON object of named connections when you need more than one Postgres database from the same MCP server. Pass the matching `connection` name when calling a Postgres tool; if you omit it, `POSTGRES_DEFAULT` is used. `POSTGRES_URL` still works as a backward-compatible single-database fallback.
+Set `POSTGRES_URLS` to a JSON object of named connections when you need more than one Postgres database from the same MCP server. You can use either:
+
+- Flat map: `{"main":"postgresql://...","reporting":"postgresql://..."}`
+- Server map: `{"srv1":{"main":"postgresql://..."},"srv2":{"analytics":"postgresql://..."}}`
+
+When using the server map, pass the matching `connection` name in the form `server.database` (for example, `srv1.main`). If you omit `connection`, `POSTGRES_DEFAULT` is used. `POSTGRES_URL` still works as a backward-compatible single-database fallback.
 
 Set `MSSQL_CONNECTIONS` to a JSON object of named connections when you need more than one MSSQL database from the same MCP server. Pass the matching `connection` name when calling an MSSQL tool; if you omit it, `MSSQL_DEFAULT` is used. `MSSQL_CONNECTION_STRING` still works as a backward-compatible single-database fallback.
 
