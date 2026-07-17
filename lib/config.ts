@@ -145,9 +145,9 @@ export const CONFIG = {
     summaryPreviewBytes: Math.max(500, Number(process.env.GITHUB_SUMMARY_PREVIEW_BYTES || '2000'))
   },
   app: {
-    maxRows: 50,
-    previewRows: 5,
+    maxRows: 500,
+    previewRows: 50,
     queryTimeoutMs: 15_000,
-    allowedSchemas: ['public', 'dbo']
+    allowedSchemas: ['public', 'dbo', 'feed_db_prod','master_prod']
   }
 };
