@@ -7,25 +7,26 @@ import * as z from 'zod/v4';
 
 import { CONFIG } from '@/lib/config';
 
-import { getConstraints } from '@/lib/tools/getConstraints';
-import { compareSchema } from '@/lib/tools/compareSchema';
-import { getForeignKeySummary } from '@/lib/tools/getForeignKeySummary';
-import { getDatabaseInfo } from '@/lib/tools/getDatabaseInfo';
-import { getColumnStats } from '@/lib/tools/getColumnStats';
-import { compareObjectVersions } from '@/lib/tools/compareObjectVersions';
-import { getDependencyGraph } from '@/lib/tools/getDependencyGraph';
-import { getFunctionSummary } from '@/lib/tools/getFunctionSummary';
-import { getIndexes } from '@/lib/tools/getIndexes';
-import { getRelationPath } from '@/lib/tools/getRelationPath';
-import { getProcedureSummary } from '@/lib/tools/getProcedureSummary';
-import { getRelationships } from '@/lib/tools/getRelationships';
-import { getSampleRows } from '@/lib/tools/getSampleRows';
-import { explainQuery } from '@/lib/tools/explainQuery';
-import { getTableSchema } from '@/lib/tools/getSchema';
-import { getTableSampleByColumns } from '@/lib/tools/getTableSampleByColumns';
-import { getTableSummary } from '@/lib/tools/getTableSummary';
-import { executeReadQuery } from '@/lib/tools/executeReadQuery';
-import { executeStoredProcedure } from '@/lib/tools/executeStoredProcedure';
+import { getConstraints } from '@/lib/tools/db/getConstraints';
+import { compareSchema } from '@/lib/tools/db/compareSchema';
+import { getForeignKeySummary } from '@/lib/tools/db/getForeignKeySummary';
+import { getDatabaseInfo } from '@/lib/tools/db/getDatabaseInfo';
+import { getColumnStats } from '@/lib/tools/db/getColumnStats';
+import { compareObjectVersions } from '@/lib/tools/db/compareObjectVersions';
+import { getDependencyGraph } from '@/lib/tools/db/getDependencyGraph';
+import { getFunctionSummary } from '@/lib/tools/db/getFunctionSummary';
+import { getIndexes } from '@/lib/tools/db/getIndexes';
+import { getRelationPath } from '@/lib/tools/db/getRelationPath';
+import { getProcedureSummary } from '@/lib/tools/db/getProcedureSummary';
+import { getRelationships } from '@/lib/tools/db/getRelationships';
+import { getNl2sqlContext } from '@/lib/tools/db/getNl2sqlContext';
+import { getSampleRows } from '@/lib/tools/db/getSampleRows';
+import { explainQuery } from '@/lib/tools/db/explainQuery';
+import { getTableSchema } from '@/lib/tools/db/getSchema';
+import { getTableSampleByColumns } from '@/lib/tools/db/getTableSampleByColumns';
+import { getTableSummary } from '@/lib/tools/db/getTableSummary';
+import { executeReadQuery } from '@/lib/tools/db/executeReadQuery';
+import { executeStoredProcedure } from '@/lib/tools/db/executeStoredProcedure';
 import { listOrgRepos } from '@/lib/tools/github/listOrgRepos';
 import { getRepoTree } from '@/lib/tools/github/getRepoTree';
 import { getFileContent } from '@/lib/tools/github/getFileContent';
@@ -40,20 +41,20 @@ import { getFileHistory } from '@/lib/tools/github/getFileHistory';
 import { compareRefs } from '@/lib/tools/github/compareRefs';
 import { getPullRequestComments } from '@/lib/tools/github/getPullRequestComments';
 import { getGitHubMetrics } from '@/lib/tools/github/githubClient';
-import { getViewSummary } from '@/lib/tools/getViewSummary';
-import { listSchemas } from '@/lib/tools/listSchemas';
-import { listPostgresConnections } from '@/lib/tools/listPostgresConnections';
-import { listMssqlConnections } from '@/lib/tools/listMssqlConnections';
-import { listStoredProcedures } from '@/lib/tools/listStoredProcedures';
-import { listTables } from '@/lib/tools/listTables';
-import { getRowCount } from '@/lib/tools/getRowCount';
-import { searchTables } from '@/lib/tools/searchTables';
-import { searchViews } from '@/lib/tools/searchViews';
-import { searchFunctions } from '@/lib/tools/searchFunctions';
-import { searchProcedures } from '@/lib/tools/searchProcedures';
-import { searchColumns } from '@/lib/tools/searchColumns';
-import { getViewDefinition } from '@/lib/tools/getViewDefinition';
-import { runQuery } from '@/lib/tools/runQuery';
+import { getViewSummary } from '@/lib/tools/db/getViewSummary';
+import { listSchemas } from '@/lib/tools/db/listSchemas';
+import { listPostgresConnections } from '@/lib/tools/db/listPostgresConnections';
+import { listMssqlConnections } from '@/lib/tools/db/listMssqlConnections';
+import { listStoredProcedures } from '@/lib/tools/db/listStoredProcedures';
+import { listTables } from '@/lib/tools/db/listTables';
+import { getRowCount } from '@/lib/tools/db/getRowCount';
+import { searchTables } from '@/lib/tools/db/searchTables';
+import { searchViews } from '@/lib/tools/db/searchViews';
+import { searchFunctions } from '@/lib/tools/db/searchFunctions';
+import { searchProcedures } from '@/lib/tools/db/searchProcedures';
+import { searchColumns } from '@/lib/tools/db/searchColumns';
+import { getViewDefinition } from '@/lib/tools/db/getViewDefinition';
+import { runQuery } from '@/lib/tools/db/runQuery';
 import { getMetadataCacheMetrics } from '@/lib/cache/metadataCache';
 import { installProcessGuards } from '@/lib/runtime/processGuards';
 import { MCP_METRICS } from '@/lib/runtime/mcpMetrics';
@@ -482,7 +483,7 @@ export function createMcpServer(): McpServer {
     'list_postgres_connections',
     {
       title: 'List Postgres Connections',
-      description: 'List configured Postgres connection aliases and indicate which one is the default.',
+      description: 'List configured Postgres connection aliases with the schemas available in each database, and indicate which connection is the default.',
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -1144,10 +1145,11 @@ export function createMcpServer(): McpServer {
         openWorldHint: true
       },
       inputSchema: passthroughObject({
-        db: z.enum(SUPPORTED_DATABASES)
+        db: z.enum(SUPPORTED_DATABASES),
+        schema: z.string().optional()
       })
     },
-    async ({ db, connection }: any) => toTextResult(await listTables(db, undefined, connection))
+    async ({ db, schema, connection }: any) => toTextResult(await listTables(db, schema, undefined, connection))
   );
 
   server.registerTool(
@@ -1568,6 +1570,28 @@ export function createMcpServer(): McpServer {
   );
 
   server.registerTool(
+    'get_foreign_key_summary',
+    {
+      title: 'Get Foreign Key Summary',
+      description: 'Return a compact summary of foreign-key relationships for a schema or table.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        table: z.string().optional(),
+        schema: z.string().optional(),
+        limit: z.number().int().min(1).max(5).default(5)
+      })
+    },
+    async ({ db, table, schema, limit, connection }: any) =>
+      toTextResult(await getForeignKeySummary(db, table, schema, limit, undefined, connection))
+  );
+
+  server.registerTool(
     'get_relation_path',
     {
       title: 'Get Relation Path',
@@ -1646,6 +1670,28 @@ export function createMcpServer(): McpServer {
       })
     },
     async ({ db, connection }: any) => toTextResult(await listStoredProcedures(db, undefined, connection))
+  );
+
+  server.registerTool(
+    'get_nl2sql_context',
+    {
+      title: 'Get NL2SQL Context',
+      description: 'Return the schema context an agent needs to write SQL for a natural-language question: ranked relevant tables, their columns, foreign-key relationships, and dialect-specific SQL hints. No SQL is generated server-side.',
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      },
+      inputSchema: passthroughObject({
+        db: z.enum(SUPPORTED_DATABASES),
+        question: z.string().min(1),
+        schema: z.string().optional(),
+        max_tables: z.number().int().min(1).max(10).default(5)
+      })
+    },
+    async ({ db, question, schema, max_tables, connection }: any) =>
+      toTextResult(await getNl2sqlContext(db, question, schema, max_tables, undefined, connection))
   );
 
   return server;
@@ -1982,7 +2028,7 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
           return withCors(jsonError('list_tables requires db.', 400));
         }
 
-        const result = await listTables(input.db, body.credentials);
+        const result = await listTables(input.db, input.schema, body.credentials, input.connection);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 
@@ -2122,6 +2168,16 @@ async function handleLegacyRequest(request: Request): Promise<Response> {
         }
 
         const result = await getRelationships(input.db, input.table, input.schema, body.credentials);
+        return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
+      }
+
+      case 'get_nl2sql_context': {
+        const input = body.input as ToolRequestWithCredentials<'get_nl2sql_context'>['input'];
+        if (!input?.db || !input?.question) {
+          return withCors(jsonError('get_nl2sql_context requires db and question.', 400));
+        }
+
+        const result = await getNl2sqlContext(input.db, input.question, input.schema, input.max_tables, body.credentials, input.connection);
         return withCors(NextResponse.json(result, { status: result.success ? 200 : 400 }));
       }
 

@@ -1,22 +1,12 @@
-import { CONFIG } from '@/lib/config';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryMySQL } from '@/lib/db/mysql';
 import { queryPostgres } from '@/lib/db/postgres';
 import { querySQLite } from '@/lib/db/sqlite';
+import { normalizeSchemaFilter } from '@/lib/tools/db/toolUtils';
 import type { DBType, DatabaseCredentials, ToolResponse } from '@/lib/types';
 
 function resolveSchemas(db: DBType, schema?: string): string[] {
-  const fallback = db === 'postgres' ? 'public' : 'dbo';
-
-  if (schema) {
-    const resolved = schema.trim();
-    if (!CONFIG.app.allowedSchemas.includes(resolved)) {
-      throw new Error(`Schema ${resolved} is not allowed. Allowed schemas: ${CONFIG.app.allowedSchemas.join(', ')}.`);
-    }
-    return [resolved];
-  }
-
-  return CONFIG.app.allowedSchemas.length > 0 ? CONFIG.app.allowedSchemas : [fallback];
+  return [normalizeSchemaFilter(db, schema)];
 }
 
 function clampLimit(limit: number | undefined): number {

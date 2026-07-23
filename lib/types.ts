@@ -58,7 +58,8 @@ export type ToolName =
   | 'get_relationships'
   | 'get_indexes'
   | 'get_constraints'
-  | 'list_stored_procedures';
+  | 'list_stored_procedures'
+  | 'get_nl2sql_context';
 
 export type RunQueryInput = {
   db: DBType;
@@ -257,6 +258,7 @@ export type GitHubPullRequestCommentsInput = {
 
 export type ListTablesInput = {
   db: DBType;
+  schema?: string;
 } & PostgresConnectionInput;
 
 export type ListSchemasInput = {
@@ -432,6 +434,13 @@ export type GetRelationshipsInput = {
   schema?: string;
 } & PostgresConnectionInput;
 
+export type GetNl2sqlContextInput = {
+  db: DBType;
+  question: string;
+  schema?: string;
+  max_tables?: number;
+} & PostgresConnectionInput;
+
 export type DatabaseCredentials = {
   type: DBType;
   postgres?: {
@@ -519,6 +528,7 @@ export type ToolInputMap = {
   get_indexes: GetIndexesInput;
   get_constraints: GetConstraintsInput;
   list_stored_procedures: ListStoredProceduresInput;
+  get_nl2sql_context: GetNl2sqlContextInput;
 };
 
 export type ToolRequestWithCredentials<TTool extends ToolName = ToolName> = {

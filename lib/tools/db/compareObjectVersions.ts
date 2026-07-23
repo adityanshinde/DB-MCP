@@ -1,7 +1,7 @@
-import { getFunctionSummary } from '@/lib/tools/getFunctionSummary';
-import { getProcedureSummary } from '@/lib/tools/getProcedureSummary';
-import { getTableSummary } from '@/lib/tools/getTableSummary';
-import { getViewSummary } from '@/lib/tools/getViewSummary';
+import { getFunctionSummary } from '@/lib/tools/db/getFunctionSummary';
+import { getProcedureSummary } from '@/lib/tools/db/getProcedureSummary';
+import { getTableSummary } from '@/lib/tools/db/getTableSummary';
+import { getViewSummary } from '@/lib/tools/db/getViewSummary';
 import type { DBType, DatabaseCredentials, ToolResponse } from '@/lib/types';
 
 type ObjectType = 'table' | 'view' | 'procedure' | 'function';

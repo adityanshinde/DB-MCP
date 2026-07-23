@@ -1,21 +1,10 @@
-import { CONFIG } from '@/lib/config';
 import { METADATA_CACHE_TTLS, readThroughMetadataCache } from '@/lib/cache/metadataCache';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryPostgres } from '@/lib/db/postgres';
 import { getSchemaMySQL } from '@/lib/db/mysql';
 import { getSchemaSQLite } from '@/lib/db/sqlite';
+import { normalizeSchemaFilter } from '@/lib/tools/db/toolUtils';
 import type { DBType, ToolResponse, DatabaseCredentials } from '@/lib/types';
-
-function resolveSchema(db: DBType, schema?: string): string {
-  const fallback = db === 'postgres' ? 'public' : 'dbo';
-  const resolved = (schema || fallback).trim();
-
-  if (!CONFIG.app.allowedSchemas.includes(resolved)) {
-    throw new Error(`Schema ${resolved} is not allowed. Allowed schemas: ${CONFIG.app.allowedSchemas.join(', ')}.`);
-  }
-
-  return resolved;
-}
 
 export async function getTableSchema(
   db: DBType,
@@ -25,7 +14,7 @@ export async function getTableSchema(
   connection?: string
 ): Promise<ToolResponse<{ table: string; schema: string; columns: Array<Record<string, unknown>> }>> {
   try {
-    const resolvedSchema = resolveSchema(db, schema);
+    const resolvedSchema = normalizeSchemaFilter(db, schema);
 
     const data = await readThroughMetadataCache({
       db,

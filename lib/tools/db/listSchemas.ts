@@ -1,4 +1,3 @@
-import { CONFIG } from '@/lib/config';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryMySQL } from '@/lib/db/mysql';
 import { queryPostgres } from '@/lib/db/postgres';
@@ -16,16 +15,14 @@ export async function listSchemas(
         `SELECT schema_name
          FROM information_schema.schemata
          WHERE schema_name NOT IN ('information_schema', 'pg_catalog')
+           AND schema_name !~ '^pg_'
          ORDER BY schema_name`,
         [],
         credentials?.postgres,
         connection
       );
 
-      const allowedSchemas = new Set(CONFIG.app.allowedSchemas);
-      const schemas = result.rows
-        .map((row) => row.schema_name)
-        .filter((schemaName) => allowedSchemas.has(schemaName));
+      const schemas = result.rows.map((row) => row.schema_name);
 
       return {
         success: true,
@@ -45,10 +42,7 @@ export async function listSchemas(
         connection
       );
 
-      const allowedSchemas = new Set(CONFIG.app.allowedSchemas);
-      const schemas = (result.rows as Array<{ schema_name: string }>)
-        .map((row) => row.schema_name)
-        .filter((schemaName) => allowedSchemas.has(schemaName));
+      const schemas = (result.rows as Array<{ schema_name: string }>).map((row) => row.schema_name);
 
       return {
         success: true,

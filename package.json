@@ -8,7 +8,11 @@
     "start": "node .next/standalone/server.js",
     "mcp:stdio:build": "node ./scripts/build-mcp-stdio.mjs",
     "mcp:stdio": "node ./dist/mcp-stdio.mjs",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.config.integration.ts"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
@@ -31,10 +35,12 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "esbuild": "^0.28.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.0.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^2.1.9"
   }
 }

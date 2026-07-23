@@ -1,8 +1,8 @@
-import { CONFIG } from '@/lib/config';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryMySQL } from '@/lib/db/mysql';
 import { queryPostgres } from '@/lib/db/postgres';
 import { logMcpError, logMcpEvent } from '@/lib/runtime/observability';
+import { normalizeSchemaFilter, quoteIdentifier } from '@/lib/tools/db/toolUtils';
 import type { DatabaseCredentials, ExecuteStoredProcedureInput, QueryMetadata, ToolResponse } from '@/lib/types';
 
 type StoredProcedureResult = {
@@ -14,17 +14,11 @@ type StoredProcedureResult = {
   rows: unknown[];
 };
 
-const SIMPLE_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
 function validateIdentifier(value: string, label: string): string {
   const normalized = value.trim();
 
   if (!normalized) {
     throw new Error(`${label} is required.`);
-  }
-
-  if (!SIMPLE_IDENTIFIER.test(normalized)) {
-    throw new Error(`${label} must use only letters, numbers, and underscores, with no spaces or punctuation.`);
   }
 
   return normalized;
@@ -39,18 +33,13 @@ function resolveSchema(db: ExecuteStoredProcedureInput['db'], schema?: string): 
     return schema ? validateIdentifier(schema, 'Schema') : null;
   }
 
-  const resolvedSchema = validateIdentifier(schema?.trim() || (db === 'mssql' ? 'dbo' : 'public'), 'Schema');
-  const allowedSchemas = new Set(CONFIG.app.allowedSchemas.map((entry) => entry.toLowerCase()));
-
-  if (!allowedSchemas.has(resolvedSchema.toLowerCase())) {
-    throw new Error(`Schema "${resolvedSchema}" is not allowlisted. Allowed schemas: ${Array.from(allowedSchemas).join(', ')}.`);
-  }
-
-  return resolvedSchema;
+  return normalizeSchemaFilter(db, schema);
 }
 
 function buildMssqlCall(schema: string | null, procedure: string, params: unknown[]): { sql: string; paramMap: Record<string, unknown> } {
-  const qualifiedName = schema ? `${schema}.${procedure}` : procedure;
+  const qualifiedName = schema
+    ? `${quoteIdentifier('mssql', schema)}.${quoteIdentifier('mssql', procedure)}`
+    : quoteIdentifier('mssql', procedure);
   const paramNames = params.map((_, index) => `p${index + 1}`);
   const callArgs = paramNames.map((name) => `@${name}`).join(', ');
 
@@ -61,13 +50,17 @@ function buildMssqlCall(schema: string | null, procedure: string, params: unknow
 }
 
 function buildPostgresCall(schema: string | null, procedure: string, params: unknown[]): string {
-  const qualifiedName = schema ? `${schema}.${procedure}` : procedure;
+  const qualifiedName = schema
+    ? `${quoteIdentifier('postgres', schema)}.${quoteIdentifier('postgres', procedure)}`
+    : quoteIdentifier('postgres', procedure);
   const placeholders = params.map((_, index) => `$${index + 1}`).join(', ');
   return `CALL ${qualifiedName}(${placeholders})`;
 }
 
 function buildMySqlCall(schema: string | null, procedure: string, params: unknown[]): string {
-  const qualifiedName = schema ? `${schema}.${procedure}` : procedure;
+  const qualifiedName = schema
+    ? `${quoteIdentifier('mysql', schema)}.${quoteIdentifier('mysql', procedure)}`
+    : quoteIdentifier('mysql', procedure);
   const placeholders = params.map(() => '?').join(', ');
   return `CALL ${qualifiedName}(${placeholders})`;
 }

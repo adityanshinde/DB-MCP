@@ -147,7 +147,6 @@ export const CONFIG = {
   app: {
     maxRows: 500,
     previewRows: 50,
-    queryTimeoutMs: 15_000,
-    allowedSchemas: ['public', 'dbo', 'feed_db_prod','master_prod']
+    queryTimeoutMs: 15_000
   }
 };

@@ -1,20 +1,9 @@
-import { CONFIG } from '@/lib/config';
 import { queryMSSQL } from '@/lib/db/mssql';
 import { queryMySQL } from '@/lib/db/mysql';
 import { queryPostgres } from '@/lib/db/postgres';
 import { querySQLite } from '@/lib/db/sqlite';
+import { normalizeSchemaFilter } from '@/lib/tools/db/toolUtils';
 import type { DBType, DatabaseCredentials, ToolResponse } from '@/lib/types';
-
-function resolveSchema(db: DBType, schema?: string): string {
-  const fallback = db === 'postgres' ? 'public' : 'dbo';
-  const resolved = (schema || fallback).trim();
-
-  if (!CONFIG.app.allowedSchemas.includes(resolved)) {
-    throw new Error(`Schema ${resolved} is not allowed. Allowed schemas: ${CONFIG.app.allowedSchemas.join(', ')}.`);
-  }
-
-  return resolved;
-}
 
 export async function getViewDefinition(
   db: DBType,
@@ -25,7 +14,7 @@ export async function getViewDefinition(
 ): Promise<ToolResponse<{ view: string; schema?: string; definition: string | null }>> {
   try {
     if (db === 'postgres') {
-      const resolvedSchema = resolveSchema(db, schema);
+      const resolvedSchema = normalizeSchemaFilter(db, schema);
       const result = await queryPostgres<{ schema_name: string; view_name: string; definition: string | null }>(
         `SELECT table_schema AS schema_name,
                 table_name AS view_name,
@@ -51,7 +40,7 @@ export async function getViewDefinition(
     }
 
     if (db === 'mssql') {
-      const resolvedSchema = resolveSchema(db, schema);
+      const resolvedSchema = normalizeSchemaFilter(db, schema);
       const result = await queryMSSQL(
         `SELECT sch.name AS schema_name,
                 v.name AS view_name,

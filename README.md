@@ -33,11 +33,13 @@ The backend never connects to databases in write mode and rejects unsafe SQL bef
 - `lib/config.ts` - central configuration and env access
 - `lib/db/postgres.ts` - PostgreSQL connection pool and query helper
 - `lib/db/mssql.ts` - MSSQL connection pool and query helper
-- `lib/tools/runQuery.ts` - safe query execution tool
-- `lib/tools/listTables.ts` - list tables tool
-- `lib/tools/getSchema.ts` - table schema tool
-- `lib/tools/getRelationships.ts` - FK relationship discovery tool
-- `lib/tools/listStoredProcedures.ts` - stored procedure listing tool
+- `lib/tools/db/` - database MCP tools (introspection, queries, connections)
+- `lib/tools/db/runQuery.ts` - safe query execution tool
+- `lib/tools/db/listTables.ts` - list tables tool
+- `lib/tools/db/getSchema.ts` - table schema tool
+- `lib/tools/db/getRelationships.ts` - FK relationship discovery tool
+- `lib/tools/db/listStoredProcedures.ts` - stored procedure listing tool
+- `lib/tools/github/` - GitHub code intelligence tools
 - `lib/validators/queryValidator.ts` - read-only SQL validation
 - `lib/types.ts` - shared types for requests and responses
 
@@ -100,9 +102,11 @@ It defines:
 - PostgreSQL connection string or named connection map
 - MSSQL connection string or named connection map
 - max row limit for query execution
-- allowed schemas
+- default query limits and timeouts
 
 Changing `.env` is enough to reconfigure the backend.
+
+Tools that accept `schema` use the schema supplied by the caller. PostgreSQL falls back to `public` and MSSQL falls back to `dbo` when it is omitted. `list_schemas` returns every non-system schema visible to the configured database user.
 
 ## Supported tools
 
@@ -328,7 +332,7 @@ On failure:
 - reject SQL comments
 - reject dangerous keywords such as `exec`, `grant`, and `xp_`
 - use read-only database users only
-- limit access to allowed schemas only
+- grant the database user access only to schemas the MCP server may expose
 
 ## Performance notes
 

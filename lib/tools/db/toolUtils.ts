@@ -19,5 +19,18 @@ export function truncateText(value: string, maxLength: number): string {
 }
 
 export function normalizeSchemaFilter(db: 'postgres' | 'mssql' | 'mysql' | 'sqlite', schema?: string): string {
-  return (schema || (db === 'postgres' ? 'public' : 'dbo')).trim();
+  const fallback = db === 'postgres'
+    ? 'public'
+    : db === 'mssql'
+      ? 'dbo'
+      : db === 'sqlite'
+        ? 'main'
+        : 'default';
+  const resolved = (schema || fallback).trim();
+
+  if (!resolved) {
+    throw new Error('Schema must not be empty.');
+  }
+
+  return resolved;
 }

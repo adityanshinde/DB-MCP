@@ -36,7 +36,7 @@
 - `get_column_stats` — Cardinality, nullability stats
 - `compare_schema` — Structural diff between two tables
 - `compare_object_versions` — Diff tables, views, procedures, functions
-- `list_schemas` — Available schemas (filtered by allowlist)
+- `list_schemas` — All non-system schemas visible to the database user
 - `list_stored_procedures` — All procedures in database
 - `list_postgres_connections` / `list_mssql_connections` — Connection aliases
 - `get_database_info` — Database version, user, schema

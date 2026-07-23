@@ -14,7 +14,7 @@ DB-MCP is a specialized MCP (Model Context Protocol) server that bridges AI assi
 
 ### Strengths
 - Multi-database support with consistent tooling abstraction
-- Strong security foundations: parameterized queries, schema allowlisting, SQL validation
+- Strong security foundations: parameterized queries, safely quoted identifiers, SQL validation
 - GitHub integration with repository allowlists and C# code intelligence
 - Two-tier caching (L1 memory + L2 Redis) for performance
 - Comprehensive observability (metrics, logging, cache hit rates)
