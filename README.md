@@ -60,8 +60,20 @@ The backend never connects to databases in write mode and rejects unsafe SQL bef
 All runtime settings are controlled from one place only: `.env` and `lib/config.ts`.
 
 ```env
-POSTGRES_URLS={"main":"postgresql://USER:PASSWORD@HOST:5432/MAIN_DB","reporting":"postgresql://USER:PASSWORD@HOST:5432/REPORTING_DB"}
-POSTGRES_DEFAULT=main
+POSTGRES_DEFAULT=PROD.Main.MAIN_DB
+POSTGRES_URLS={
+  "UAT": {
+    "Main": {
+      "MAIN_DB": "postgresql://USER:PASSWORD@HOST:5432/MAIN_DB"
+    }
+  },
+  "PROD": {
+    "Main": {
+      "MAIN_DB": "postgresql://USER:PASSWORD@HOST:5432/MAIN_DB",
+      "REPORTING_DB": "postgresql://USER:PASSWORD@HOST:5432/REPORTING_DB"
+    }
+  }
+}
 POSTGRES_URL=postgresql://USER:PASSWORD@HOST:5432/MAIN_DB
 MSSQL_CONNECTIONS={"main":"Data Source=13.235.202.125;Initial Catalog=REPORT_DB_FROMKG;User ID=sa;Password=your_password;Encrypt=false;TrustServerCertificate=true","analytics":"Data Source=13.235.202.125;Initial Catalog=ANALYTICS_DB;User ID=sa;Password=your_password;Encrypt=false;TrustServerCertificate=true"}
 MSSQL_DEFAULT=main
@@ -84,14 +96,15 @@ MCP_UI_ORIGIN=https://your-allowed-ui.example.com
 SQLITE_ALLOWED_DIR=C:\path\to\allowed\sqlite\dir
 ```
 
-Set `POSTGRES_URLS` to a JSON object of named connections when you need more than one Postgres database from the same MCP server. You can use either:
+Set `POSTGRES_URLS` to a JSON object of named connections. Pretty-printed / multiline JSON in `.env` is supported. Nested objects flatten to dotted aliases:
 
-- Flat map: `{"main":"postgresql://...","reporting":"postgresql://..."}`
-- Server map: `{"srv1":{"main":"postgresql://..."},"srv2":{"analytics":"postgresql://..."}}`
+- Flat map: `{"main":"postgresql://..."}` → `connection=main`
+- Server map: `{"srv1":{"main":"postgresql://..."}}` → `connection=srv1.main`
+- Env map: `{"PROD":{"Main":{"MAIN_DB":"postgresql://..."}}}` → `connection=PROD.Main.MAIN_DB`
 
-When using the server map, pass the matching `connection` name in the form `server.database` (for example, `srv1.main`). If you omit `connection`, `POSTGRES_DEFAULT` is used. `POSTGRES_URL` still works as a backward-compatible single-database fallback.
+If you omit `connection`, `POSTGRES_DEFAULT` is used (it must match a flattened alias). `POSTGRES_URL` still works as a backward-compatible single-database fallback.
 
-Set `MSSQL_CONNECTIONS` to a JSON object of named connections when you need more than one MSSQL database from the same MCP server. Pass the matching `connection` name when calling an MSSQL tool; if you omit it, `MSSQL_DEFAULT` is used. `MSSQL_CONNECTION_STRING` still works as a backward-compatible single-database fallback.
+Set `MSSQL_CONNECTIONS` the same way (flat or nested JSON). Pass the matching `connection` name when calling an MSSQL tool; if you omit it, `MSSQL_DEFAULT` is used. `MSSQL_CONNECTION_STRING` still works as a backward-compatible single-database fallback.
 
 Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` to enable the shared L2 cache. `MCP_CACHE_L1=true` keeps the optional in-memory L1 cache on for warm instances.
 

@@ -110,7 +110,7 @@ export function createMcpServer(): McpServer {
     'list_postgres_connections',
     {
       title: 'List Postgres Connections',
-      description: 'List configured Postgres connection aliases with the schemas available in each database, and indicate which connection is the default.',
+      description: 'List configured Postgres connection aliases with the schemas available in each database, and indicate which connection is the default. Nested POSTGRES_URLS maps flatten to dotted aliases such as env.server.database (for example, PROD.Main.TICK_LINK_PROD).',
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,

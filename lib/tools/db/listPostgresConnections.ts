@@ -1,5 +1,6 @@
 import { CONFIG } from '@/lib/config';
 import { queryPostgres } from '@/lib/db/postgres';
+import { splitConnectionAlias } from '@/lib/runtime/parseConnections';
 import type { ToolResponse } from '@/lib/types';
 
 type PostgresConnectionSummary = {
@@ -49,9 +50,9 @@ export async function listPostgresConnections(): Promise<ToolResponse<{ default_
       };
 
       if (hasServers) {
-        const [serverName, database] = name.split('.', 2);
-        if (serverName && database) {
-          entry.server = serverName;
+        const { server, database } = splitConnectionAlias(name);
+        if (server) {
+          entry.server = server;
           entry.database = database;
         }
       }

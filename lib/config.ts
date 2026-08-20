@@ -1,3 +1,8 @@
+import { parseConnectionJson, resolveNamedDefault } from './runtime/parseConnections';
+import { loadLocalEnv } from './runtime/loadLocalEnv';
+
+loadLocalEnv();
+
 function parseList(value: string | undefined): string[] {
   return (value || '')
     .split(',')
@@ -5,100 +10,8 @@ function parseList(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-function parseJsonRecord(value: string | undefined): Record<string, string> {
-  if (!value?.trim()) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(value) as Record<string, unknown>;
-    return Object.entries(parsed).reduce<Record<string, string>>((accumulator, [key, entry]) => {
-      if (typeof entry === 'string' && key.trim()) {
-        accumulator[key.trim()] = entry.trim();
-      }
-
-      return accumulator;
-    }, {});
-  } catch {
-    return {};
-  }
-}
-
-type PostgresServerMap = Record<string, Record<string, string>>;
-
-function parsePostgresConnections(value: string | undefined): { connections: Record<string, string>; servers: PostgresServerMap } {
-  if (!value?.trim()) {
-    return { connections: {}, servers: {} };
-  }
-
-  try {
-    const parsed = JSON.parse(value) as Record<string, unknown>;
-    const connections: Record<string, string> = {};
-    const servers: PostgresServerMap = {};
-
-    for (const [key, entry] of Object.entries(parsed)) {
-      const trimmedKey = key.trim();
-      if (!trimmedKey) {
-        continue;
-      }
-
-      if (typeof entry === 'string') {
-        const url = entry.trim();
-        if (url) {
-          connections[trimmedKey] = url;
-        }
-        continue;
-      }
-
-      if (entry && typeof entry === 'object') {
-        const dbEntries = Object.entries(entry as Record<string, unknown>).reduce<Record<string, string>>((accumulator, [dbName, dbUrl]) => {
-          const trimmedDb = dbName.trim();
-          if (typeof dbUrl === 'string' && trimmedDb) {
-            const url = dbUrl.trim();
-            if (url) {
-              accumulator[trimmedDb] = url;
-            }
-          }
-          return accumulator;
-        }, {});
-
-        if (Object.keys(dbEntries).length > 0) {
-          servers[trimmedKey] = dbEntries;
-          for (const [dbName, dbUrl] of Object.entries(dbEntries)) {
-            connections[`${trimmedKey}.${dbName}`] = dbUrl;
-          }
-        }
-      }
-    }
-
-    return { connections, servers };
-  } catch {
-    return { connections: {}, servers: {} };
-  }
-}
-
-function resolveDefaultPostgresConnection(connections: Record<string, string>): string {
-  const explicit = process.env.POSTGRES_DEFAULT?.trim();
-  if (explicit) {
-    return explicit;
-  }
-
-  const firstConnection = Object.keys(connections)[0];
-  return firstConnection || 'default';
-}
-
-function resolveDefaultMssqlConnection(connections: Record<string, string>): string {
-  const explicit = process.env.MSSQL_DEFAULT?.trim();
-  if (explicit) {
-    return explicit;
-  }
-
-  const firstConnection = Object.keys(connections)[0];
-  return firstConnection || 'default';
-}
-
 const legacyPostgresUrl = process.env.POSTGRES_URL?.trim() || '';
-const parsedPostgres = parsePostgresConnections(process.env.POSTGRES_URLS);
+const parsedPostgres = parseConnectionJson(process.env.POSTGRES_URLS);
 const postgresConnections = Object.keys(parsedPostgres.connections).length > 0
   ? parsedPostgres.connections
   : legacyPostgresUrl
@@ -109,9 +22,9 @@ const postgresServers = Object.keys(parsedPostgres.servers).length > 0
   : {};
 
 const legacyMssqlConnectionString = process.env.MSSQL_CONNECTION_STRING?.trim() || '';
-const parsedMssqlConnections = parseJsonRecord(process.env.MSSQL_CONNECTIONS);
-const mssqlConnections = Object.keys(parsedMssqlConnections).length > 0
-  ? parsedMssqlConnections
+const parsedMssqlConnections = parseConnectionJson(process.env.MSSQL_CONNECTIONS);
+const mssqlConnections = Object.keys(parsedMssqlConnections.connections).length > 0
+  ? parsedMssqlConnections.connections
   : legacyMssqlConnectionString
     ? { default: legacyMssqlConnectionString }
     : {};
@@ -119,13 +32,13 @@ const mssqlConnections = Object.keys(parsedMssqlConnections).length > 0
 export const CONFIG = {
   postgres: {
     url: legacyPostgresUrl,
-    defaultConnection: resolveDefaultPostgresConnection(postgresConnections),
+    defaultConnection: resolveNamedDefault(postgresConnections, process.env.POSTGRES_DEFAULT),
     connections: postgresConnections,
     servers: postgresServers
   },
   mssql: {
     connectionString: legacyMssqlConnectionString,
-    defaultConnection: resolveDefaultMssqlConnection(mssqlConnections),
+    defaultConnection: resolveNamedDefault(mssqlConnections, process.env.MSSQL_DEFAULT),
     connections: mssqlConnections,
     options: {
       encrypt: true,

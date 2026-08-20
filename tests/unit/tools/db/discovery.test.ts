@@ -21,7 +21,11 @@ vi.mock('@/lib/config', () => ({
   CONFIG: {
     postgres: {
       defaultConnection: 'default',
-      connections: { default: 'postgres://local/app', analytics: 'postgres://local/analytics' },
+      connections: {
+        default: 'postgres://local/app',
+        analytics: 'postgres://local/analytics',
+        'UAT.Main.TICK_FROMKG': 'postgres://uat/tick'
+      },
       servers: {
         prod: { app: 'postgres://prod/app' }
       }
@@ -137,6 +141,14 @@ describe('discovery and connection tools', () => {
       expect(result.success).toBe(true);
       expect(result.data?.total).toBeGreaterThan(0);
       expect(result.data?.connections.some((c) => c.schemas?.includes('public'))).toBe(true);
+    });
+
+    it('listPostgresConnections treats the last dotted segment as the database', async () => {
+      queryPostgres.mockResolvedValue(postgresResult([]));
+      const result = await listPostgresConnections();
+      const nested = result.data?.connections.find((connection) => connection.name === 'UAT.Main.TICK_FROMKG');
+      expect(nested?.server).toBe('UAT.Main');
+      expect(nested?.database).toBe('TICK_FROMKG');
     });
 
     it('listMssqlConnections returns configured aliases', async () => {
