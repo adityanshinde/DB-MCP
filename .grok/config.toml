@@ -1,0 +1,9 @@
+# Project-scoped MCP: Grok spawns this process over stdio.
+# No need to run start-mcp.ps1. Rebuild after server changes:
+#   npm run mcp:stdio:build
+
+[mcp_servers.UATDB]
+command = "C:\\Program Files\\nodejs\\node.exe"
+args = ["D:\\A2A\\DB-MCP\\dist\\mcp-stdio.mjs"]
+enabled = true
+startup_timeout_sec = 45

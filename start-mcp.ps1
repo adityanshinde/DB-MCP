@@ -1,6 +1,10 @@
 <#
 .SYNOPSIS
-    Starts the DB-MCP server in the background on a fixed port.
+    Starts the DB-MCP HTTP server in the background on a fixed port.
+
+    For Cursor / Grok local use, prefer stdio instead — the client launches
+    `node dist/mcp-stdio.mjs` and you do not need this script.
+
 .EXAMPLE
     ./start-mcp.ps1            # starts on the default port (3939)
     ./start-mcp.ps1 -Port 3000 # starts on a custom port

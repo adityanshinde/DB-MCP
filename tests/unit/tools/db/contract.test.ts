@@ -5,12 +5,13 @@ import { describe, expect, it } from 'vitest';
 import { DB_TOOL_NAMES, LEGACY_DB_TOOL_NAMES } from '../../../helpers/dbToolNames';
 
 const routeSource = readFileSync(resolve(process.cwd(), 'app/api/mcp/route.ts'), 'utf8');
+const serverSource = readFileSync(resolve(process.cwd(), 'lib/mcp/createMcpServer.ts'), 'utf8');
 
 describe('database tool contracts', () => {
   it('registers every database tool in the MCP server', () => {
     for (const tool of DB_TOOL_NAMES) {
-      expect(routeSource).toContain(`'${tool}'`);
-      expect(routeSource).toContain('server.registerTool(');
+      expect(serverSource).toContain(`'${tool}'`);
+      expect(serverSource).toContain('server.registerTool(');
     }
   });
 

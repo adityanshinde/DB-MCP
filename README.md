@@ -50,7 +50,10 @@ The backend never connects to databases in write mode and rejects unsafe SQL bef
 2. Copy `.env.example` to `.env`
 3. Paste your credentials into `.env`
 4. Run locally:
-   - `npm run dev`
+   - **Cursor / Grok (recommended):** stdio — the client starts the server, no `start-mcp.ps1`
+     - `npm run mcp:stdio:build`
+     - point the MCP client at `node dist/mcp-stdio.mjs` (see `.cursor/mcp.json` and `.grok/config.toml`)
+   - **HTTP / remote:** `./start-mcp.ps1` or `npm run dev`, then `http://localhost:3939/api/mcp`
 
 ## Environment variables
 
